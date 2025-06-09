@@ -263,41 +263,26 @@ def display_ball_by_ball(innings_log, innings_num, team_name, runs, balls, wicke
                  base_commentary += f" {runs_off_extras} run{'s' if runs_off_extras > 1 else ''}."
             commentary = base_commentary
         else: # This is an event where a ball is bowled (could be legal, a no-ball bowled, or a free hit)
+            out_type = event_data.get('out_type')
+            is_not_out_on_fh = event_data.get('is_dismissal') == False and event_data.get('is_free_hit_delivery')
+
             # Determine outcome from event_text or dedicated fields
-            if " W " in event_text or event_data.get('out_type'): # Wicket condition
-                out_type = event_data.get('out_type')
-                # Check for "NOT OUT (Free Hit!)" which means it wasn't a true dismissal
-                is_not_out_on_fh = "NOT OUT (Free Hit!)" in event_text or \
-                                   (event_data.get('is_free_hit_delivery') and event_data.get('is_dismissal') == False)
-
-                if is_not_out_on_fh:
-                    # The event_text itself (e.g., "DOT BALL (caught on Free Hit - Not Out)") is descriptive.
-                    # We can prepend a generic "lucky escape" type of commentary if desired, or just use event_text.
-                    # For now, let's assume event_text is sufficient for these non-dismissals.
-                    # If we want to add more flavor:
-                    # base_commentary = "Lucky escape for the batsman on the free hit! "
-                    # However, this might make the commentary too verbose if event_text is already good.
-                    # Let's ensure that the run-based commentary is still generated if runs were scored.
-                    if 'runs_this_ball' in event_data: # Runs were scored even on the non-dismissal
-                        outcome_runs_str = str(event_data['runs_this_ball'])
-                        base_commentary = random.choice(commentary_lines.get(outcome_runs_str, commentary_lines['0']))
-                    else: # Likely a dot ball if no runs_this_ball, and it was a non-dismissal attempt
-                        base_commentary = random.choice(commentary_lines['0'])
-
-                elif out_type and out_type in commentary_lines['wicket']:
+            if out_type and not is_not_out_on_fh: # Actual wicket dismissal
+                if out_type in commentary_lines['wicket']:
                     base_commentary = random.choice(commentary_lines['wicket'][out_type])
-                elif out_type: # Wicket type is present but not in our specific list, use general
+                else: # Wicket type is present but not in our specific list, use general
                      base_commentary = random.choice(commentary_lines['wicket']['general']) + f" ({out_type})"
-                else: # Fallback if out_type is not in event_data for some reason
-                    base_commentary = random.choice(commentary_lines['wicket']['general'])
-
-                # Check for "NOT OUT (Free Hit!)"
-                if "NOT OUT (Free Hit!)" in event_text or ("Free Hit" in event_text and "W" not in event_text.split("Score:")[0]): # A bit heuristic
-                     # If it was a dismissal type on FH but not out, the main event text will show it.
-                     # We might want a specific "lucky escape" commentary here.
-                     # For now, the event_text itself should be descriptive.
-                     pass # The event_text from mainconnect already handles "NOT OUT (Free Hit!)"
-            else: # Runs or dot
+            elif is_not_out_on_fh:
+                # For "NOT OUT (Free Hit!)" type events, the event_text from mainconnect.py is already descriptive.
+                # We can add a prefix or just use the run commentary.
+                # Example: "Lucky escape on the Free Hit! "
+                # For now, let's focus on the runs scored on this ball.
+                if 'runs_this_ball' in event_data:
+                    outcome_runs_str = str(event_data['runs_this_ball'])
+                    base_commentary = random.choice(commentary_lines.get(outcome_runs_str, commentary_lines['0']))
+                else: # Default to dot ball commentary if no specific runs logged for this non-dismissal
+                    base_commentary = random.choice(commentary_lines['0'])
+            else: # Runs or dot (not a wicket event)
                 # Use 'runs_this_ball' from the log if available for accuracy
                 if 'runs_this_ball' in event_data:
                     outcome_runs_str = str(runs_this_ball)
