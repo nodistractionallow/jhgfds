@@ -1623,7 +1623,7 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
         for k in denAvg: denAvg[k] = max(0.001, denAvg[k])
         outAvg = max(0.001, outAvg)
 
-        getOutcome_standalone(bowler, batter, denAvg, outAvg, outTypeAvg, over, is_free_hit=is_free_hit, event_type_param="LEGAL")
+        getOutcome_standalone(bowler, batter, denAvg, outAvg, outTypeAvg, over, is_fh_param=is_free_hit, event_type_param="LEGAL")
         return "LEGAL"
 
     # Removed the old nested getOutcome function as it's replaced by getOutcome_standalone
