@@ -67,11 +67,44 @@ commentary_lines = {
         "Huge SIX! That’s gone miles into the crowd!",
         "Maximum! Smashed with authority!"
     ],
-    'wicket': [
-        "OUT! Bowled him! The stumps are shattered!",
-        "Caught! Brilliant grab in the deep, big wicket down!",
-        "GONE! Cleaned up with a peach of a delivery!"
-    ],
+    'wicket': {
+        'caught': [
+            "Caught! Edged and taken!",
+            "Caught! Simple catch for the fielder.",
+            "Caught! What a grab! That was flying!",
+            "Caught! The batsman walks, a good take in the field."
+        ],
+        'bowled': [
+            "Bowled him! Right through the gate!",
+            "Bowled! Timber! The stumps are a mess!",
+            "Bowled! Cleaned him up, no answer to that delivery!"
+        ],
+        'lbw': [
+            "LBW! That looked plumb! The umpire raises the finger.",
+            "LBW! Trapped in front, that's got to be out!",
+            "LBW! He's given him. Looked like it was hitting the stumps."
+        ],
+        'runOut': [ # Note: 'runout' (lowercase 'o') is used in mainconnect logs for out_type
+            "Run out! Terrible mix-up, and he's short of his ground!",
+            "Run out! Direct hit! What a piece of fielding!",
+            "Run out! They went for a risky single, and paid the price."
+        ],
+        'stumped': [
+            "Stumped! Quick work by the keeper, he was out of his crease!",
+            "Stumped! Fooled by the flight, and the bails are off in a flash.",
+            "Stumped! Great take and stumping by the wicketkeeper."
+        ],
+        'hitwicket': [
+            "Hit wicket! Oh dear, he's knocked his own bails off!",
+            "Hit wicket! What a bizarre way to get out!",
+            "Hit wicket! He's dislodged the bails with his bat/body."
+        ],
+        'general': [ # Fallback for any other wicket type or if specific type not found
+            "OUT! That's a big wicket for the bowling side!",
+            "WICKET! The batsman has to depart.",
+            "GONE! A crucial breakthrough for the bowlers."
+        ]
+    },
     'wide': [
         "Wide ball! The bowler strays down the leg side.",
         "Called wide, too far outside off stump.",
@@ -86,7 +119,34 @@ commentary_lines = {
         "That’s the end of the innings. A solid total on the board!",
         "Innings wrapped up, setting up an exciting chase!",
         "End of the batting effort, now over to the bowlers!"
-    ]
+    ],
+    'no_ball_call': [
+        "No Ball! The bowler has overstepped. Free hit coming up!",
+        "That's a No Ball! An extra run and a free hit.",
+        "No Ball called by the umpire. The next delivery is a free hit."
+    ],
+    'free_hit_delivery': [ # Can be appended or used standalone
+        "Free Hit delivery!",
+        "Here comes the Free Hit...",
+        "Batsman has a free license on this Free Hit!"
+    ],
+    'no_ball_runs': [ # For runs scored off a no-ball delivery
+        "And runs scored off the No Ball! Adding insult to injury.",
+        "They pick up runs on the No Ball as well!",
+        "The batsman cashes in on the No Ball delivery!"
+    ],
+    'extras': { # New category for Byes and Leg-byes
+        'B': [
+            "Byes signalled! They sneak a single as the keeper misses.",
+            "That's byes, well run by the batsmen.",
+            "A bye taken as the ball evades everyone."
+        ],
+        'LB': [
+            "Leg Byes! Off the pads and they run.",
+            "Signalled as Leg Byes by the umpire.",
+            "They get leg-byes for that deflection."
+        ]
+    }
 }
 
 def display_points_table():
@@ -164,22 +224,111 @@ def display_scorecard(bat_tracker, bowl_tracker, team_name, innings_num):
     bowlerTabulate = []
     for player in bowl_tracker:
         data = bowl_tracker[player]
-        runs = data['runs']
-        balls = data['balls']
-        wickets = data['wickets']
-        overs = f"{balls // 6}.{balls % 6}" if balls else "0.0"
-        economy = round((runs / balls) * 6, 2) if balls else 'NA'
-        bowlerTabulate.append([player, overs, runs, wickets, economy])
+        runs_conceded = data['runs'] # Renamed for clarity from mainconnect.py 'runs'
+        balls_bowled = data['balls']
+        wickets_taken = data['wickets']
+        noballs_bowled = data.get('noballs', 0) # Get noballs, default to 0 if not present
+        overs_str = f"{balls_bowled // 6}.{balls_bowled % 6}" if balls_bowled else "0.0"
+        economy_rate = round((runs_conceded / balls_bowled) * 6, 2) if balls_bowled else 'NA'
+        bowlerTabulate.append([player, overs_str, runs_conceded, wickets_taken, noballs_bowled, economy_rate])
     
     print("\nBowling:")
-    print(tabulate(bowlerTabulate, headers=["Player", "Overs", "Runs", "Wickets", "Economy"], tablefmt="grid"))
+    print(tabulate(bowlerTabulate, headers=["Player", "Overs", "Runs", "Wickets", "NB", "Economy"], tablefmt="grid"))
 
 def display_ball_by_ball(innings_log, innings_num, team_name, runs, balls, wickets, bat_tracker, bowl_tracker):
     print(f"\n--- Innings {innings_num}: {team_name} Batting ---")
-    for event in innings_log:
-        outcome = event['event'].split()[-2]  # Extract outcome (e.g., '4', 'W', 'Wide')
-        commentary_key = outcome if outcome in commentary_lines else ('wicket' if 'W' in outcome else '0')
-        print(f"Ball {event['balls']}: {event['event']} - {random.choice(commentary_lines[commentary_key])}")
+    for event_data in innings_log: # Renamed 'event' to 'event_data' to avoid conflict
+        event_text = event_data['event']
+        commentary = ""
+
+        # Determine commentary based on event type from mainconnect.py log structure
+        event_type = event_data.get('type')
+        original_event_type = event_data.get('original_event_type') # "NB", "LEGAL" from mainconnect log for the ball outcome
+        is_fh_delivery = event_data.get('is_free_hit_delivery', False) # True if this ball was a free hit
+        extras_type = event_data.get('extras_type')
+        runs_this_ball = event_data.get('runs_this_ball', 0) # Actual runs scored on this specific ball event (bat or extras like byes)
+
+        base_commentary = ""
+        outcome_runs_str = "" # Used to pick run-specific commentary lines like '0', '4', '6'
+
+        if event_type == "NO_BALL_CALL":
+            # This event is just the call of "No Ball", not the ball itself being played.
+            commentary = random.choice(commentary_lines['no_ball_call'])
+        elif event_type == "WIDE":
+            commentary = random.choice(commentary_lines['wide'])
+        elif event_type == "EXTRAS" and extras_type in commentary_lines['extras']:
+            runs_off_extras = event_data.get('runs_off_extras', 0)
+            base_commentary = random.choice(commentary_lines['extras'][extras_type])
+            if runs_off_extras > 0:
+                 base_commentary += f" {runs_off_extras} run{'s' if runs_off_extras > 1 else ''}."
+            commentary = base_commentary
+        else: # This is an event where a ball is bowled (could be legal, a no-ball bowled, or a free hit)
+            # Determine outcome from event_text or dedicated fields
+            if " W " in event_text or event_data.get('out_type'): # Wicket condition
+                out_type = event_data.get('out_type')
+                # Check for "NOT OUT (Free Hit!)" which means it wasn't a true dismissal
+                is_not_out_on_fh = "NOT OUT (Free Hit!)" in event_text or \
+                                   (event_data.get('is_free_hit_delivery') and event_data.get('is_dismissal') == False)
+
+                if is_not_out_on_fh:
+                    # The event_text itself (e.g., "DOT BALL (caught on Free Hit - Not Out)") is descriptive.
+                    # We can prepend a generic "lucky escape" type of commentary if desired, or just use event_text.
+                    # For now, let's assume event_text is sufficient for these non-dismissals.
+                    # If we want to add more flavor:
+                    # base_commentary = "Lucky escape for the batsman on the free hit! "
+                    # However, this might make the commentary too verbose if event_text is already good.
+                    # Let's ensure that the run-based commentary is still generated if runs were scored.
+                    if 'runs_this_ball' in event_data: # Runs were scored even on the non-dismissal
+                        outcome_runs_str = str(event_data['runs_this_ball'])
+                        base_commentary = random.choice(commentary_lines.get(outcome_runs_str, commentary_lines['0']))
+                    else: # Likely a dot ball if no runs_this_ball, and it was a non-dismissal attempt
+                        base_commentary = random.choice(commentary_lines['0'])
+
+                elif out_type and out_type in commentary_lines['wicket']:
+                    base_commentary = random.choice(commentary_lines['wicket'][out_type])
+                elif out_type: # Wicket type is present but not in our specific list, use general
+                     base_commentary = random.choice(commentary_lines['wicket']['general']) + f" ({out_type})"
+                else: # Fallback if out_type is not in event_data for some reason
+                    base_commentary = random.choice(commentary_lines['wicket']['general'])
+
+                # Check for "NOT OUT (Free Hit!)"
+                if "NOT OUT (Free Hit!)" in event_text or ("Free Hit" in event_text and "W" not in event_text.split("Score:")[0]): # A bit heuristic
+                     # If it was a dismissal type on FH but not out, the main event text will show it.
+                     # We might want a specific "lucky escape" commentary here.
+                     # For now, the event_text itself should be descriptive.
+                     pass # The event_text from mainconnect already handles "NOT OUT (Free Hit!)"
+            else: # Runs or dot
+                # Use 'runs_this_ball' from the log if available for accuracy
+                if 'runs_this_ball' in event_data:
+                    outcome_runs_str = str(runs_this_ball)
+                else: # Fallback to parsing event_text (less reliable)
+                    parts = event_text.split(" ")
+                    try:
+                        score_idx = parts.index("Score:") - 1
+                        parsed_runs = parts[score_idx]
+                        if parsed_runs.isdigit():
+                            outcome_runs_str = parsed_runs
+                    except (ValueError, IndexError):
+                        outcome_runs_str = "0" # Default if parsing fails
+
+                base_commentary = random.choice(commentary_lines.get(outcome_runs_str, commentary_lines['0']))
+
+            # Prepend free hit commentary if it was a free hit delivery
+            if is_fh_delivery:
+                commentary = random.choice(commentary_lines['free_hit_delivery']) + " " + base_commentary
+            else:
+                commentary = base_commentary
+
+            # Append commentary for runs scored off a no-ball (if applicable)
+            # This applies if the original event was a No Ball, and runs were scored from the bat
+            if original_event_type == "NB" and runs_this_ball > 0 :
+                 # We need to ensure these runs are not the automatic "1 run" for NB itself.
+                 # The `runs_this_ball` in the log for the getOutcome part of a NoBall already represents runs OFF THE BAT.
+                 # The "NO_BALL_CALL" log entry accounts for the 1 penalty run.
+                 commentary += " " + random.choice(commentary_lines['no_ball_runs'])
+
+        print(f"Ball {event_data.get('balls', 'N/A')}: {event_text} - {commentary}")
+
     overs = f"{balls // 6}.{balls % 6}"
     print(f"\nInnings Total: {runs}/{wickets} in {overs} overs")
     print(random.choice(commentary_lines['innings_end']))
@@ -252,6 +401,7 @@ for i in range(len(teams)):
                         bowlingInfo[player]['runs'] += bowl_tracker[player]['runs']
                         bowlingInfo[player]['ballLog'] += bowl_tracker[player]['ballLog']
                         bowlingInfo[player]['wickets'] += bowl_tracker[player]['wickets']
+                        bowlingInfo[player]['noballs'] = bowlingInfo[player].get('noballs', 0) + bowl_tracker[player].get('noballs', 0) # Aggregate noballs
                         bowlingInfo[player]['matches'] += 1
 
             # Points Table Update
@@ -352,6 +502,7 @@ def playoffs(team1, team2, matchtag):
                     bowlingInfo[player]['runs'] += tracker[player]['runs']
                     bowlingInfo[player]['ballLog'] += tracker[player]['ballLog']
                     bowlingInfo[player]['wickets'] += tracker[player]['wickets']
+                    bowlingInfo[player]['noballs'] = bowlingInfo[player].get('noballs', 0) + tracker[player].get('noballs', 0) # Aggregate noballs for playoffs
                     bowlingInfo[player]['matches'] += 1
 
         display_points_table()
@@ -405,7 +556,8 @@ for b in bowlingInfo:
     c = bowlingInfo[b]
     overs = f"{c['balls'] // 6}.{c['balls'] % 6}" if c['balls'] else "0"
     economy = round((c['runs'] / c['balls']) * 6, 2) if c['balls'] else "NA"
-    bowlingTabulate.append([b, c['wickets'], overs, c['runs'], economy])
+    noballs = c.get('noballs', 0)
+    bowlingTabulate.append([b, c['wickets'], overs, c['runs'], noballs, economy])
 
 bowlingTabulate = sorted(bowlingTabulate, key=lambda x: x[1], reverse=True)
 
@@ -416,7 +568,7 @@ with open(os.path.join(dir_path, "batStats.txt"), "w") as f:
 
 with open(os.path.join(dir_path, "bowlStats.txt"), "w") as f:
     sys.stdout = f
-    print(tabulate(bowlingTabulate, headers=["Player", "Wickets", "Overs", "Runs Conceded", "Economy"], tablefmt="grid"))
+    print(tabulate(bowlingTabulate, headers=["Player", "Wickets", "Overs", "Runs Conceded", "NB", "Economy"], tablefmt="grid"))
     sys.stdout = sys.__stdout__
 
 print("bat", battingf, "bowl", bowlingf)
