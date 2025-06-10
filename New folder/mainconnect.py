@@ -727,7 +727,7 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                 "bowlerTracker": copy.deepcopy(bowlerTracker), "batsman": btname,
                 "batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
                 "bowler": blname, "type": "NO_BALL_CALL", "free_hit_active_on_delivery": True })
-            getOutcome_standalone(bowler, batter, denAvg, outAvg, outTypeAvg, over, is_free_hit=True, original_event_param="NB")
+            getOutcome_standalone(bowler, batter, denAvg, outAvg, outTypeAvg, over, is_fh_param=True, event_type_param="NB")
             return "NO_BALL"
 
         # Wide check
@@ -813,7 +813,7 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                 adj = random.uniform(0.07,0.09); denAvg['0']-=adj*(0.4/3); denAvg['1']-=adj*(1.8/3); denAvg['4']+=adj*(1.5/3); denAvg['6']+=adj*(1.5/3); outAvg = max(0.001, outAvg+0.01)
         # --- End of aggression adjustments ---
 
-        getOutcome_standalone(bowler, batter, denAvg, outAvg, outTypeAvg, over, is_free_hit=is_free_hit, original_event_param="LEGAL")
+        getOutcome_standalone(bowler, batter, denAvg, outAvg, outTypeAvg, over, is_fh_param=is_free_hit, event_type_param="LEGAL")
         return "LEGAL"
 
     for i in range(20):
