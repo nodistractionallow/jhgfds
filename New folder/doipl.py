@@ -237,82 +237,80 @@ def display_scorecard(bat_tracker, bowl_tracker, team_name, innings_num):
 
 def display_ball_by_ball(innings_log, innings_num, team_name, runs, balls, wickets, bat_tracker, bowl_tracker):
     print(f"\n--- Innings {innings_num}: {team_name} Batting ---")
-    for event_data in innings_log: # Renamed 'event' to 'event_data' to avoid conflict
+
+    i = 0
+    while i < len(innings_log):
+        event_data = innings_log[i]
         event_text = event_data['event']
         commentary = ""
 
-        # Determine commentary based on event type from mainconnect.py log structure
         event_type = event_data.get('type')
-        original_event_type = event_data.get('original_event_type') # "NB", "LEGAL" from mainconnect log for the ball outcome
-        is_fh_delivery = event_data.get('is_free_hit_delivery', False) # True if this ball was a free hit
+        original_event_type = event_data.get('original_event_type')
+        is_fh_delivery = event_data.get('is_free_hit_delivery', False)
         extras_type = event_data.get('extras_type')
-        runs_this_ball = event_data.get('runs_this_ball', 0) # Actual runs scored on this specific ball event (bat or extras like byes)
+        # Use runs_this_ball from event_data, not the function parameter 'runs' which is total innings runs
+        runs_this_ball_current_event = event_data.get('runs_this_ball', 0)
 
-        base_commentary = ""
-        outcome_runs_str = "" # Used to pick run-specific commentary lines like '0', '4', '6'
+        consolidated_nb_commentary = False
+        no_ball_suffix = random.choice(commentary_lines['no_ball_call']).split('.')[1].strip() # "Free hit coming up!"
 
         if event_type == "NO_BALL_CALL":
-            # This event is just the call of "No Ball", not the ball itself being played.
-            commentary = random.choice(commentary_lines['no_ball_call'])
+            total_nb_runs = 1 # Start with the penalty run
+
+            if i + 1 < len(innings_log):
+                next_event_data = innings_log[i+1]
+                if next_event_data.get('original_event_type') == "NB" and next_event_data.get('is_free_hit_delivery'):
+                    runs_off_nb_delivery = next_event_data.get('runs_this_ball', 0)
+                    total_nb_runs += runs_off_nb_delivery
+
+                    event_text = next_event_data['event'] # Use event text from the ball outcome for score accuracy
+                    commentary = f"Nb ({total_nb_runs})! {no_ball_suffix}"
+
+                    i += 1 # Skip the next log entry as it's processed
+                    consolidated_nb_commentary = True
+
+            if not consolidated_nb_commentary: # Fallback if lookahead failed
+                commentary = f"Nb (1)! {no_ball_suffix}"
+
         elif event_type == "WIDE":
             commentary = random.choice(commentary_lines['wide'])
         elif event_type == "EXTRAS" and extras_type in commentary_lines['extras']:
-            runs_off_extras = event_data.get('runs_off_extras', 0)
-            base_commentary = random.choice(commentary_lines['extras'][extras_type])
-            if runs_off_extras > 0:
-                 base_commentary += f" {runs_off_extras} run{'s' if runs_off_extras > 1 else ''}."
-            commentary = base_commentary
-        else: # This is an event where a ball is bowled (could be legal, a no-ball bowled, or a free hit)
-            out_type = event_data.get('out_type')
-            is_not_out_on_fh = event_data.get('is_dismissal') == False and event_data.get('is_free_hit_delivery')
+            runs_off_extras = event_data.get('runs_off_extras', 0) # This specific key might be from an older version of log
+            # Assuming 'runs_this_ball' now holds extras runs for 'EXTRAS' type events
+            # If 'runs_off_extras' is not reliably in the log, use runs_this_ball_current_event for extras amount
+            actual_extras_runs = event_data.get('runs_off_extras', runs_this_ball_current_event)
 
-            # Determine outcome from event_text or dedicated fields
+            base_commentary = random.choice(commentary_lines['extras'][extras_type])
+            if actual_extras_runs > 0:
+                 base_commentary += f" {actual_extras_runs} run{'s' if actual_extras_runs > 1 else ''}."
+            commentary = base_commentary
+        else: # Handles legal deliveries, and outcomes of No-Balls if not consolidated
+            out_type = event_data.get('out_type')
+            is_not_out_on_fh = event_data.get('is_dismissal') == False and is_fh_delivery
+
+            base_commentary = ""
+            outcome_runs_str = ""
+
             if out_type and not is_not_out_on_fh: # Actual wicket dismissal
                 if out_type in commentary_lines['wicket']:
                     base_commentary = random.choice(commentary_lines['wicket'][out_type])
-                else: # Wicket type is present but not in our specific list, use general
+                else:
                      base_commentary = random.choice(commentary_lines['wicket']['general']) + f" ({out_type})"
             elif is_not_out_on_fh:
-                # For "NOT OUT (Free Hit!)" type events, the event_text from mainconnect.py is already descriptive.
-                # We can add a prefix or just use the run commentary.
-                # Example: "Lucky escape on the Free Hit! "
-                # For now, let's focus on the runs scored on this ball.
-                if 'runs_this_ball' in event_data:
-                    outcome_runs_str = str(event_data['runs_this_ball'])
-                    base_commentary = random.choice(commentary_lines.get(outcome_runs_str, commentary_lines['0']))
-                else: # Default to dot ball commentary if no specific runs logged for this non-dismissal
-                    base_commentary = random.choice(commentary_lines['0'])
-            else: # Runs or dot (not a wicket event)
-                # Use 'runs_this_ball' from the log if available for accuracy
-                if 'runs_this_ball' in event_data:
-                    outcome_runs_str = str(runs_this_ball)
-                else: # Fallback to parsing event_text (less reliable)
-                    parts = event_text.split(" ")
-                    try:
-                        score_idx = parts.index("Score:") - 1
-                        parsed_runs = parts[score_idx]
-                        if parsed_runs.isdigit():
-                            outcome_runs_str = parsed_runs
-                    except (ValueError, IndexError):
-                        outcome_runs_str = "0" # Default if parsing fails
-
+                outcome_runs_str = str(runs_this_ball_current_event)
+                run_commentary = random.choice(commentary_lines.get(outcome_runs_str, commentary_lines['0']))
+                base_commentary = f"Phew! {run_commentary} (Not out on Free Hit!)"
+            else: # Runs or dot
+                outcome_runs_str = str(runs_this_ball_current_event)
                 base_commentary = random.choice(commentary_lines.get(outcome_runs_str, commentary_lines['0']))
 
-            # Prepend free hit commentary if it was a free hit delivery
-            if is_fh_delivery:
+            if is_fh_delivery and not consolidated_nb_commentary :
                 commentary = random.choice(commentary_lines['free_hit_delivery']) + " " + base_commentary
             else:
                 commentary = base_commentary
 
-            # Append commentary for runs scored off a no-ball (if applicable)
-            # This applies if the original event was a No Ball, and runs were scored from the bat
-            if original_event_type == "NB" and runs_this_ball > 0 :
-                 # We need to ensure these runs are not the automatic "1 run" for NB itself.
-                 # The `runs_this_ball` in the log for the getOutcome part of a NoBall already represents runs OFF THE BAT.
-                 # The "NO_BALL_CALL" log entry accounts for the 1 penalty run.
-                 commentary += " " + random.choice(commentary_lines['no_ball_runs'])
-
         print(f"Ball {event_data.get('balls', 'N/A')}: {event_text} - {commentary}")
+        i += 1 # Move to next log item
 
     overs = f"{balls // 6}.{balls % 6}"
     print(f"\nInnings Total: {runs}/{wickets} in {overs} overs")
