@@ -9,6 +9,7 @@ MIN_BAT_BALLS_EXPERIENCE = 300
 MIN_BOWL_BALLS_EXPERIENCE = 300
 FILLER_BATSMAN_MAX_CAREER_RUNS = 50
 FILLER_BATSMAN_MAX_BALLS_FACED = 100
+MIN_BOWLING_OUT_RATE_THRESHOLD = 0.015 # Min wickets per 100 balls equivalent
 
 def normalize_probabilities(prob_dict, target_sum):
     # Ensure all values are non-negative first
@@ -235,6 +236,7 @@ def pitchInfo(venue, typeOfPitch):
 def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, dew, detoriate):
     global target, innings1Balls, innings1Runs, innings1Batting, innings1Bowling, winner, winMsg, innings1Battracker, innings1Bowltracker, innings1Log
     # print(battingName, bowlingName, pace, spin, outfield, dew, detoriate)
+    is_next_ball_free_hit = False # Initialize for the innings
     bowlerTracker = {} #add names of all in innings def
     batterTracker = {} #add names of all in innings def
     battingOrder = []
@@ -360,6 +362,7 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
 
     for i in bowling:
         i['bowlBallsTotalRate'] = i['bowlBallsTotal'] / i['matches']
+        # Ensure 'noballs' is initialized for each bowler
         bowlerTracker[i['playerInitials']] = {'playerInitials': i['playerInitials'], 'balls': 0, 
         'runs': 0, 'ballLog': [], 'overs': 0, 'wickets': 0, 'noballs': 0}
         runObj = {}
@@ -461,6 +464,8 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
     designated_middle_bowlers = sorted(designated_bowlers, key=lambda k: k.get('overNumbersObject', {}).get('10', 0), reverse=True)
     designated_death_bowlers = sorted(designated_bowlers, key=lambda k: k.get('overNumbersObject', {}).get('19', 0), reverse=True)
 
+    designated_bowler_rotation_list = [b['playerInitials'] for b in designated_bowlers]
+
     batter1 = battingOrder[0]
     batter2 = battingOrder[1]
     onStrike = batter1
@@ -486,41 +491,62 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
         bowler2_obj = bowler1_obj # Fallback if only one unique bowler available or no opening specified
 
     last_bowler_initials = None
-    is_next_ball_free_hit = False # Moved this to be initialized once per innings
+    # is_next_ball_free_hit is already initialized at the start of innings1
 
     def playerDismissed(player):
         nonlocal batter1, batter2, onStrike, wickets, battingOrder, batterTracker # Ensure all used nonlocals are declared
-        # print("OUT", player['player']['playerInitials'])
-        if(wickets == 10): # This check might be redundant if loop breaks on wickets == 10
-            print("ALL OUT")
-            return # Ensure function exits
+        # 'player' is the batsman who got out.
+        # 'wickets' has already been incremented before this function is called.
+        # So, 'wickets' now represents the total number of batsmen out (e.g., 1 after the 1st wicket).
 
-        # Determine which batter is out and find the next batter
-        # The logic for finding next batter needs to ensure it picks someone not already out or DNB
-        # and handles the case where fewer than 11 players are available or listed.
-        next_batter_index = wickets # wickets has just been incremented for the dismissal
+        if wickets == 10: # Check if all out
+            # This print might be redundant if main loop handles it or if game ends immediately
+            # print(f"Innings 1: All out. Total wickets: {wickets}")
+            if batter1 == player: batter1 = None
+            elif batter2 == player: batter2 = None
+            onStrike = None # No one is on strike if all out
+            return
 
-        # Simplified next batter selection - assumes battingOrder is complete and players bat in order
-        if next_batter_index < len(battingOrder):
-            next_batter_info = battingOrder[next_batter_index]
-            if batter1 == player:
-                batter1 = next_batter_info
+        # The battingOrder is 0-indexed: battingOrder[0], battingOrder[1], battingOrder[2], ...
+        # Initially, players at crease are battingOrder[0] and battingOrder[1].
+        # When the 1st wicket falls (wickets = 1), the new player is battingOrder[2]. Index is 2.
+        # This new player's index is 'wickets + 1'.
+        new_batter_index = wickets + 1
+
+        if new_batter_index < len(battingOrder): # Check if there's a valid next batsman in the order
+            next_batter_info = battingOrder[new_batter_index]
+            if batter1 == player: # If batter1 was the one who got out
+                batter1 = next_batter_info # Replace batter1 with the new batsman
+            elif batter2 == player: # If batter2 was the one who got out
+                batter2 = next_batter_info # Replace batter2 with the new batsman
             else:
-                batter2 = next_batter_info
-            onStrike = next_batter_info # New batter is usually on strike
+                # This case implies 'player' was not one of the current batters, which is unexpected.
+                # Adding a log for safety.
+                print(f"DEBUG WARNING (Innings 1 playerDismissed): Dismissed player {player['player']['playerInitials']} was not batter1 or batter2. Current batter1: {batter1['player']['playerInitials'] if batter1 else 'None'}, batter2: {batter2['player']['playerInitials'] if batter2 else 'None'}.")
+                # Fallback: assume the 'onStrike' batter object was 'player'. Replace the corresponding variable.
+                # This situation implies a potential mismatch upstream if player is not batter1 or batter2.
+                # For now, the new batter still comes in and is on strike.
+                # The critical part is that next_batter_info becomes onStrike.
+                pass
+
+
+            onStrike = next_batter_info # The new batsman is now on strike
         else:
-            # This case implies all available batters are out, should align with wickets == 10
-            print("All batters dismissed or batting order exhausted.")
-            # Fallback: if playerDismissed is called when wickets < 10 but no next batter,
-            # this might indicate an issue or end of available players.
-            # For now, let the main loop condition (wickets == 10) handle innings end.
-            if batter1 == player: batter1 = None # Mark as no batter
-            else: batter2 = None # Mark as no batter
-            # onStrike might become None, which needs to be handled by the calling code or loop condition
+            # Not enough players left in battingOrder to replace the dismissed one,
+            # or wickets have reached 10 (though handled above, this is a safeguard).
+            # This implies an all-out situation or exhausted batting list.
+            # print(f"Innings 1: All batters dismissed or batting order exhausted. Total wickets: {wickets}")
+            if batter1 == player:
+                batter1 = None
+            elif batter2 == player:
+                batter2 = None
+            # If all out, onStrike should become None. The main game loop should also check wickets == 10.
+            if wickets == 10: # or new_batter_index >= len(battingOrder)
+                 onStrike = None
 
     # This is the new, refactored getOutcome_standalone function for innings1
-    def getOutcome_standalone(current_bowler, current_batter, den_avg_param, out_avg_param, out_type_avg_param, current_over_str, is_fh_param=False, event_type_param="LEGAL"):
-        nonlocal batterTracker, bowlerTracker, runs, balls, ballLog, wickets, onStrike, bowling, batter1, batter2 # Added bowling, batter1, batter2
+    def getOutcome_standalone(current_bowler, current_batter, den_avg_param, out_avg_param, out_type_avg_param, current_over_str, is_fh_param=False, event_type_param="LEGAL"): # Added is_fh_param and event_type_param
+        nonlocal batterTracker, bowlerTracker, runs, balls, ballLog, wickets, onStrike, bowling, batter1, batter2
         global innings1Log
 
         bln = current_bowler['playerInitials']
@@ -570,7 +596,7 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                                         "balls": balls, "runs_this_ball": runs_on_this_ball, "total_runs": runs, "wickets": wickets,
                                         "batterTracker": copy.deepcopy(batterTracker), "bowlerTracker": copy.deepcopy(bowlerTracker),
                                         "batsman": btn,"batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
-                                        "bowler": bln, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param})
+                                        "bowler": bln, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param}) # Ensure these params are logged
                     if runs_on_this_ball % 2 == 1:
                         onStrike = batter2 if onStrike == batter1 else batter1
                     return
@@ -609,13 +635,13 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                             print(current_over_str, f"{current_bowler['displayName']} to {current_batter['player']['displayName']}", f"NOT OUT ({out_type_actual} on Free Hit!)", "Score: " + str(runs) + "/" + str(wickets))
                             ball_log_str = f"{current_over_str}:0-{out_type_actual}-FH-NotOut"
                             # Log non-dismissal event for free hit
-                            innings1Log.append({"event": current_over_str + f" {current_bowler['displayName']} to {current_batter['player']['displayName']}" + f" DOT BALL ({out_type_actual} on Free Hit - Not Out)" + " Score: " + str(runs) + "/" + str(wickets),
+                            innings1Log.append({"event": current_over_str + f" {current_bowler['displayName']} to {current_batter['player']['displayName']}" + f" DOT BALL ({out_type_actual} on Free Hit - Not Out!)" + " Score: " + str(runs) + "/" + str(wickets), # Added ! for emphasis
                                                 "balls": balls, "runs_this_ball": 0, "total_runs": runs, "wickets": wickets,
                                                 "batterTracker": copy.deepcopy(batterTracker), "bowlerTracker": copy.deepcopy(bowlerTracker),
                                                 "batsman": btn, "batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
-                                                "bowler": bln, "is_dismissal": False, "out_type_on_fh_nodismissal": out_type_actual, "is_free_hit_delivery": True, "original_event_type": event_type_param})
+                                                "bowler": bln, "is_dismissal": False, "out_type_on_fh_nodismissal": out_type_actual, "is_free_hit_delivery": True, "original_event_type": event_type_param}) # Ensure these params are logged
 
-                        if is_dismissal:
+                        if is_dismissal: # Proceed only if it's a valid dismissal
                             wickets += 1
                             out_desc = out_type_actual.title()
                             runs_off_wicket_ball = 0
@@ -641,10 +667,46 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                                                 "balls": balls, "runs_this_ball": runs_off_wicket_ball, "total_runs": runs, "wickets": wickets,
                                                 "batterTracker": copy.deepcopy(batterTracker), "bowlerTracker": copy.deepcopy(bowlerTracker),
                                                 "batsman": btn,"batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
-                                                "bowler": bln, "out_type": out_type_actual, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param})
+                                                "bowler": bln, "out_type": out_type_actual, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param}) # Ensure these params are logged
                             playerDismissed(current_batter) # Pass the batter object who is out
 
                     else: # Dot ball, no wicket
+                        P_EXTRAS = 0.08 # Probability of byes/leg-byes on a dot ball
+                        if random.uniform(0,1) < P_EXTRAS and not is_fh_param : # Extras less likely on a free hit as batsman is trying to hit
+                            extras_kind = random.choice(['B', 'LB'])
+                            runs_off_extras = random.choice([1, 1, 1, 1, 2, 4]) # 1s more common
+
+                            runs += runs_off_extras
+                            # Byes/Leg-byes are not debited against bowler's runs conceded.
+                            # Batter does not get these runs.
+
+                            print(current_over_str, f"{current_bowler['displayName']} to {current_batter['player']['displayName']}", f"{runs_off_extras} {extras_kind}!", "Score: " + str(runs) + "/" + str(wickets) + log_suffix)
+                            ball_log_str = f"{current_over_str}:{runs_off_extras}{extras_kind}"
+                            # These logs are for team/innings, not directly for bowler/batter stats for these extras
+                            bowlerTracker[bln]['ballLog'].append(ball_log_str + "-EXTRAS")
+                            batterTracker[btn]['ballLog'].append(ball_log_str + "-EXTRAS")
+                            ballLog.append(ball_log_str)
+
+                            innings1Log.append({
+                                "event": current_over_str + f" {current_bowler['displayName']} to {current_batter['player']['displayName']} {runs_off_extras} {extras_kind}!" + " Score: " + str(runs) + "/" + str(wickets) + log_suffix,
+                                "balls": balls, # This is the main innings ball count, should be accurate
+                                "runs_this_ball": runs_off_extras, # Runs from this specific event
+                                "total_runs": runs, "wickets": wickets,
+                                "batterTracker": copy.deepcopy(batterTracker),
+                                "bowlerTracker": copy.deepcopy(bowlerTracker),
+                                "batsman": btn, "batter1": batter1['player']['playerInitials'] if batter1 else 'N/A',
+                                "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
+                                "bowler": bln,
+                                "type": "EXTRAS", # New event type
+                                "extras_type": extras_kind, # 'B' or 'LB'
+                                "is_free_hit_delivery": is_fh_param, # Should be false if extras logic is hit after dot ball
+                                "original_event_type": event_type_param
+                            })
+                            if runs_off_extras % 2 == 1:
+                                onStrike = batter2 if onStrike == batter1 else batter1
+                            return # Processed as extras, exit
+
+                        # Standard Dot ball if no extras
                         print(current_over_str, f"{current_bowler['displayName']} to {current_batter['player']['displayName']}", "0", "Score: " + str(runs) + "/" + str(wickets) + log_suffix)
                         ball_log_str = f"{current_over_str}:0"
                         if is_fh_param: ball_log_str += "-FH"
@@ -656,7 +718,7 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                                             "balls": balls, "runs_this_ball": 0, "total_runs": runs, "wickets": wickets,
                                             "batterTracker": copy.deepcopy(batterTracker), "bowlerTracker": copy.deepcopy(bowlerTracker),
                                             "batsman": btn,"batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
-                                            "bowler": bln, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param})
+                                            "bowler": bln, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param}) # Ensure these params are logged
                 return # From the main loop over denominationProbabilities_list
         # Fallback if loop completes without returning (should ideally not happen if probabilities sum to total_den_prob)
         # This might indicate an issue with probability generation or decider logic.
@@ -670,11 +732,11 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                                             "balls": balls, "runs_this_ball": 0, "total_runs": runs, "wickets": wickets,
                                             "batterTracker": copy.deepcopy(batterTracker), "bowlerTracker": copy.deepcopy(bowlerTracker),
                                             "batsman": btn,"batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
-                                            "bowler": bln, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param, "fallback":True })
+                                            "bowler": bln, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param, "fallback":True }) # Ensure these params are logged
 
     # Refactored delivery function for innings1
-    def delivery(bowler, batter, over, is_free_hit=False):
-        nonlocal batterTracker, bowlerTracker, onStrike, ballLog, balls, runs, wickets, spin, pace # added spin, pace
+    def delivery(bowler, batter, over, is_free_hit=False): # is_free_hit is for the CURRENT ball
+        nonlocal batterTracker, bowlerTracker, onStrike, ballLog, balls, runs, wickets, spin, pace
         global innings1Log
 
         blname = bowler['playerInitials']
@@ -712,43 +774,71 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
              outTypeAvg[a_key] = (batInfo['batOutTypesObject'].get(a_key,0) + bowlInfo['bowlOutTypesObject'].get(a_key,0)) / 2 # safer get for bowlInfo
         outTypeAvg['runOut'] = runoutChance
 
-        # No-ball check
-        noballRate = bowlInfo_orig['bowlNoballRate'] # Use original bowler's noballRate
+        # No-ball check (using original bowler stats)
+        noballRate = bowlInfo_orig['bowlNoballRate']
         is_no_ball_event = noballRate > random.uniform(0,1)
+
         if is_no_ball_event:
-            runs += 1
+            runs += 1 # Penalty run
             bowlerTracker[blname]['runs'] += 1
-            bowlerTracker[blname]['noballs'] += 1
+            bowlerTracker[blname]['noballs'] += 1 # Increment noballs count for the bowler
+
+            # Log the "NO_BALL_CALL" event - this signifies the no-ball itself
             print(over, f"{bowler['displayName']} to {batter['player']['displayName']}", "NO BALL!", "Score: " + str(runs) + "/" + str(wickets))
-            bowlerTracker[blname]['ballLog'].append(f"{over}:NB1")
+            bowlerTracker[blname]['ballLog'].append(f"{over}:NB+1") # Log indicates +1 for the no-ball
+
             innings1Log.append({
                 "event": over + f" {bowler['displayName']} to {batter['player']['displayName']}" + " NO BALL!" + " Score: " + str(runs) + "/" + str(wickets),
-                "balls": balls, "runs": runs, "wickets": wickets, "batterTracker": copy.deepcopy(batterTracker),
-                "bowlerTracker": copy.deepcopy(bowlerTracker), "batsman": btname,
-                "batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
-                "bowler": blname, "type": "NO_BALL_CALL", "free_hit_active_on_delivery": True })
-            getOutcome_standalone(bowler, batter, denAvg, outAvg, outTypeAvg, over, is_fh_param=True, event_type_param="NB")
-            return "NO_BALL"
+                "balls": balls, # balls (innings total) does not increment for the NB call itself
+                "runs_this_ball": 1, # The penalty run
+                "total_runs": runs, "wickets": wickets,
+                "batterTracker": copy.deepcopy(batterTracker),
+                "bowlerTracker": copy.deepcopy(bowlerTracker),
+                "batsman": btname,
+                "batter1": batter1['player']['playerInitials'] if batter1 else 'N/A',
+                "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
+                "bowler": blname,
+                "type": "NO_BALL_CALL", # Specific type for the no-ball call
+                "is_free_hit_delivery": True, # The delivery that follows IS a free hit
+                "original_event_type": "NB_CALL" # Distinguish from outcome of NB
+            })
 
-        # Wide check
-        wideRate = bowlInfo_orig['bowlWideRate'] # Use original bowler's wideRate
+            # Now process the outcome of the actual delivery (which is a free hit)
+            # Runs scored here are in addition to the no-ball penalty
+            getOutcome_standalone(bowler, batter, denAvg, outAvg, outTypeAvg, over, is_fh_param=True, event_type_param="NB")
+            return "NO_BALL" # Indicates a no-ball was bowled, over ball count shouldn't increase
+
+        # Wide check (if not a no-ball)
+        wideRate = bowlInfo_orig['bowlWideRate']
         if wideRate > random.uniform(0,1):
             runs += 1
             bowlerTracker[blname]['runs'] += 1
+            # Wides do not count as a ball bowled for bowler stats, nor faced by batter.
             print(over, f"{bowler['displayName']} to {batter['player']['displayName']}", "Wide", "Score: " + str(runs) + "/" + str(wickets))
-            ballLog.append(f"{over}:WD")
+            ballLog.append(f"{over}:WD") # General ball log
             bowlerTracker[blname]['ballLog'].append(f"{over}:WD")
-            innings1Log.append({"event": over + f" {bowler['displayName']} to {batter['player']['displayName']}" + " Wide" + " Score: " + str(runs) + "/" + str(wickets),
-                "balls": balls, "batterTracker": copy.deepcopy(batterTracker), "bowlerTracker": copy.deepcopy(bowlerTracker), 
-                "batsman": btname,"batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
-                "bowler": blname, "runs": runs, "wickets": wickets, "type": "WIDE"})
-            return "WIDE"
+            # Log the WIDE event
+            innings1Log.append({
+                "event": over + f" {bowler['displayName']} to {batter['player']['displayName']}" + " Wide" + " Score: " + str(runs) + "/" + str(wickets),
+                "balls": balls, # balls (innings total) does not increment for a wide
+                "runs_this_ball": 1, # The penalty run for wide
+                "total_runs": runs, "wickets": wickets,
+                "batterTracker": copy.deepcopy(batterTracker),
+                "bowlerTracker": copy.deepcopy(bowlerTracker),
+                "batsman": btname,
+                "batter1": batter1['player']['playerInitials'] if batter1 else 'N/A',
+                "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
+                "bowler": blname,
+                "type": "WIDE", # Specific type for wide
+                "is_free_hit_delivery": is_free_hit, # A wide can occur on a free hit, state persists
+                "original_event_type": "WIDE"
+            })
+            return "WIDE" # Indicates a wide, over ball count shouldn't increase
 
-        # Legal Delivery
-        balls += 1 # Innings ball count for legal deliveries
+        # Legal Delivery (or a Free Hit delivery that wasn't a No Ball or Wide itself)
+        balls += 1 # Innings ball count increments only for legal deliveries (or FHs that are legal)
 
-        # Aggression adjustments (moved from the end of the old delivery function)
-        # These modify denAvg and outAvg before calling getOutcome_standalone
+        # Aggression adjustments
         current_ball_of_innings = balls
         # --- Start of aggression adjustments (copied from original, ensure variables like 'spin', 'pace' are in scope) ---
         sumLast10 = 0
@@ -844,46 +934,111 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                 b for b in designated_bowlers
                 if bowlerTracker[b['playerInitials']]['balls'] < 24
                    and b['playerInitials'] != last_bowler_initials
+                   and b['bowlOutsRate'] >= MIN_BOWLING_OUT_RATE_THRESHOLD
             ]
 
+            if not candidates: # Fallback 1: Designated bowlers, ignore last_bowler, but respect rate
+                candidates = [
+                    b for b in designated_bowlers
+                    if bowlerTracker[b['playerInitials']]['balls'] < 24
+                       and b['bowlOutsRate'] >= MIN_BOWLING_OUT_RATE_THRESHOLD
+                ]
+                if not candidates: # Fallback 2: Designated bowlers, ignore rate and last_bowler (original fallback)
+                    print(f"INFO: Innings1 Over {i+1}, Relaxing bowling rate threshold for designated bowlers (main candidates).")
+                    candidates = [
+                        b for b in designated_bowlers
+                        if bowlerTracker[b['playerInitials']]['balls'] < 24
+                           and b['playerInitials'] != last_bowler_initials # Try with this first
+                    ]
+                    if not candidates: # Fallback 2.1: Designated bowlers, ignore rate and last_bowler restriction
+                         candidates = [b for b in designated_bowlers if bowlerTracker[b['playerInitials']]['balls'] < 24]
+
+
+            # If still no designated bowlers after primary and fallbacks for designated:
             if not candidates:
-                candidates = [b for b in designated_bowlers if bowlerTracker[b['playerInitials']]['balls'] < 24]
-                if not candidates:
-                    non_designated_available = [
+                non_designated_candidates = [
+                    b for b in bowling_selection_pool
+                    if b['playerInitials'] not in [db['playerInitials'] for db in designated_bowlers]
+                       and bowlerTracker[b['playerInitials']]['balls'] < 24
+                       and b['playerInitials'] != last_bowler_initials
+                       and b['bowlOutsRate'] >= MIN_BOWLING_OUT_RATE_THRESHOLD
+                ]
+                if not non_designated_candidates: # Try non-designated without last_bowler restriction, with rate
+                    non_designated_candidates = [
+                        b for b in bowling_selection_pool
+                        if b['playerInitials'] not in [db['playerInitials'] for db in designated_bowlers]
+                           and bowlerTracker[b['playerInitials']]['balls'] < 24
+                           and b['bowlOutsRate'] >= MIN_BOWLING_OUT_RATE_THRESHOLD
+                    ]
+                if not non_designated_candidates: # Try non-designated, relaxing rate, with last_bowler restriction
+                    print(f"INFO: Innings1 Over {i+1}, Relaxing bowling rate threshold for non-designated bowlers.")
+                    non_designated_candidates = [
                         b for b in bowling_selection_pool
                         if b['playerInitials'] not in [db['playerInitials'] for db in designated_bowlers]
                            and bowlerTracker[b['playerInitials']]['balls'] < 24
                            and b['playerInitials'] != last_bowler_initials
                     ]
-                    if not non_designated_available:
-                         non_designated_available = [
+                    if not non_designated_candidates: # Try non-designated, relaxing rate, without last_bowler restriction
+                         non_designated_candidates = [
                             b for b in bowling_selection_pool
                             if b['playerInitials'] not in [db['playerInitials'] for db in designated_bowlers]
                                and bowlerTracker[b['playerInitials']]['balls'] < 24
                         ]
 
-                    if non_designated_available:
-                        current_bowler_obj = random.choice(non_designated_available)
-                    else:
-                        print(f"WARNING: Innings1 Over {i+1}, All bowlers nearly maxed. Fallback to least bowled designated.")
-                        least_bowled_candidates = sorted([b for b in designated_bowlers if bowlerTracker[b['playerInitials']]['balls'] < 24], key=lambda b_sort: bowlerTracker[b_sort['playerInitials']]['balls'])
-                        if least_bowled_candidates: current_bowler_obj = least_bowled_candidates[0]
-                        elif bowling_selection_pool : current_bowler_obj = bowling_selection_pool[0]
-                        else: current_bowler_obj = None
+                if non_designated_candidates:
+                    # Select from non_designated_candidates, potentially phase-aware if desired, or random
+                    # For now, random choice from the filtered non-designated list
+                    current_bowler_obj = random.choice(non_designated_candidates)
                 else:
-                    current_bowler_obj = random.choice(candidates)
-            else:
+                    # Ultimate fallback: least bowled designated bowler, ignoring rate and last_bowler entirely
+                    # This was the original final fallback if non_designated_available was empty
+                    print(f"WARNING: Innings1 Over {i+1}, All preferred bowlers nearly maxed or below rate. Fallback to least bowled designated.")
+                    least_bowled_candidates = sorted(
+                        [b_sort for b_sort in designated_bowlers if bowlerTracker[b_sort['playerInitials']]['balls'] < 24],
+                        key=lambda b_lambda: bowlerTracker[b_lambda['playerInitials']]['balls']
+                    )
+                    if least_bowled_candidates:
+                        current_bowler_obj = least_bowled_candidates[0]
+                    elif bowling_selection_pool: # Absolute last resort from the broader pool
+                        current_bowler_obj = random.choice([b for b in bowling_selection_pool if bowlerTracker[b['playerInitials']]['balls'] < 24] or bowling_selection_pool)
+                    else:
+                        current_bowler_obj = None # Should ideally not happen if team has bowlers
+
+            # If candidates were found (either primary designated, fallback designated, or non-designated selected above)
+            if current_bowler_obj is None and candidates: # current_bowler_obj would be set if non_designated_candidates were chosen
+                chosen_bowler_initials_for_rotation = None
                 phase_preferred_list_objs = []
                 if phase == "PP": phase_preferred_list_objs = designated_opening_bowlers
                 elif phase == "MID": phase_preferred_list_objs = designated_middle_bowlers
                 else: phase_preferred_list_objs = designated_death_bowlers
 
-                phase_candidates = [b for b in candidates if b['playerInitials'] in [p['playerInitials'] for p in phase_preferred_list_objs]]
+                final_phase_candidates = [b for b in candidates if b['playerInitials'] in [p['playerInitials'] for p in phase_preferred_list_objs]]
 
-                if phase_candidates:
-                    current_bowler_obj = random.choice(phase_candidates)
-                else:
-                    current_bowler_obj = random.choice(candidates)
+                if final_phase_candidates:
+                    for bowler_initials_in_rotation in list(designated_bowler_rotation_list):
+                        potential_bowler = next((b for b in final_phase_candidates if b['playerInitials'] == bowler_initials_in_rotation), None)
+                        if potential_bowler:
+                            current_bowler_obj = potential_bowler
+                            chosen_bowler_initials_for_rotation = bowler_initials_in_rotation
+                            break
+                    if not chosen_bowler_initials_for_rotation:
+                        current_bowler_obj = random.choice(final_phase_candidates)
+                elif candidates: # No phase specific, but general candidates exist
+                    for bowler_initials_in_rotation in list(designated_bowler_rotation_list):
+                        potential_bowler = next((b for b in candidates if b['playerInitials'] == bowler_initials_in_rotation), None)
+                        if potential_bowler:
+                            current_bowler_obj = potential_bowler
+                            chosen_bowler_initials_for_rotation = bowler_initials_in_rotation
+                            break
+                    if not chosen_bowler_initials_for_rotation:
+                        current_bowler_obj = random.choice(candidates)
+
+                if chosen_bowler_initials_for_rotation:
+                    designated_bowler_rotation_list.remove(chosen_bowler_initials_for_rotation)
+                    designated_bowler_rotation_list.append(chosen_bowler_initials_for_rotation)
+                elif current_bowler_obj and current_bowler_obj['playerInitials'] in designated_bowler_rotation_list: # Chosen by random from filtered lists
+                     designated_bowler_rotation_list.remove(current_bowler_obj['playerInitials'])
+                     designated_bowler_rotation_list.append(current_bowler_obj['playerInitials'])
 
         if not current_bowler_obj:
             if bowling_selection_pool:
@@ -1025,6 +1180,7 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
 def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, dew, detoriate):
     # print(battingName, bowlingName, pace, spin, outfield, dew, detoriate)
     global innings2Batting, innings2Bowling, innings2Runs, innings2Balls, winner, winMsg, innings2Bowltracker, innings2Battracker, innings2Log
+    is_next_ball_free_hit = False # Initialize for the innings
     bowlerTracker = {} #add names of all in innings def
     batterTracker = {} #add names of all in innings def
     battingOrder = []
@@ -1151,6 +1307,7 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
 
     for i in bowling:
         i['bowlBallsTotalRate'] = i['bowlBallsTotal'] / i['matches']
+        # Ensure 'noballs' is initialized for each bowler
         bowlerTracker[i['playerInitials']] = {'playerInitials': i['playerInitials'], 'balls': 0, 
         'runs': 0, 'ballLog': [], 'overs': 0, 'wickets': 0, 'noballs': 0}
         runObj = {}
@@ -1252,6 +1409,8 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
     designated_middle_bowlers = sorted(designated_bowlers, key=lambda k: k.get('overNumbersObject', {}).get('10', 0), reverse=True)
     designated_death_bowlers = sorted(designated_bowlers, key=lambda k: k.get('overNumbersObject', {}).get('19', 0), reverse=True)
 
+    designated_bowler_rotation_list = [b['playerInitials'] for b in designated_bowlers]
+
     batter1 = battingOrder[0]
     batter2 = battingOrder[1]
     onStrike = batter1
@@ -1277,11 +1436,11 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
         bowler2_obj = bowler1_obj # Fallback if only one unique bowler available or no opening specified
 
     last_bowler_initials = None
-    is_next_ball_free_hit = False # Moved this to be initialized once per innings
+    # is_next_ball_free_hit is already initialized at the start of innings2
 
     # This is the new, refactored getOutcome_standalone function for innings2
-    def getOutcome_standalone(current_bowler, current_batter, den_avg_param, out_avg_param, out_type_avg_param, current_over_str, is_fh_param=False, event_type_param="LEGAL"):
-        nonlocal batterTracker, bowlerTracker, runs, balls, ballLog, wickets, onStrike, bowling, batter1, batter2, targetChased # Added bowling, batter1, batter2, targetChased
+    def getOutcome_standalone(current_bowler, current_batter, den_avg_param, out_avg_param, out_type_avg_param, current_over_str, is_fh_param=False, event_type_param="LEGAL"): # Added is_fh_param and event_type_param
+        nonlocal batterTracker, bowlerTracker, runs, balls, ballLog, wickets, onStrike, bowling, batter1, batter2, targetChased
         global innings2Log, winner, winMsg # innings2 specific globals
 
         bln = current_bowler['playerInitials']
@@ -1330,7 +1489,7 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                                         "balls": balls, "runs_this_ball": runs_on_this_ball, "total_runs": runs, "wickets": wickets,
                                         "batterTracker": copy.deepcopy(batterTracker), "bowlerTracker": copy.deepcopy(bowlerTracker),
                                         "batsman": btn,"batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
-                                        "bowler": bln, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param})
+                                        "bowler": bln, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param}) # Ensure these params are logged
                     if runs_on_this_ball % 2 == 1:
                         onStrike = batter2 if onStrike == batter1 else batter1
                 else: # Dot ball (runs_on_this_ball == 0)
@@ -1364,13 +1523,13 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                             is_dismissal = False
                             print(current_over_str, f"{current_bowler['displayName']} to {current_batter['player']['displayName']}", f"NOT OUT ({out_type_actual} on Free Hit!)", "Score: " + str(runs) + "/" + str(wickets))
                             ball_log_str = f"{current_over_str}:0-{out_type_actual}-FH-NotOut"
-                            innings2Log.append({"event": current_over_str + f" {current_bowler['displayName']} to {current_batter['player']['displayName']}" + f" DOT BALL ({out_type_actual} on Free Hit - Not Out)" + " Score: " + str(runs) + "/" + str(wickets),
+                            innings2Log.append({"event": current_over_str + f" {current_bowler['displayName']} to {current_batter['player']['displayName']}" + f" DOT BALL ({out_type_actual} on Free Hit - Not Out!)" + " Score: " + str(runs) + "/" + str(wickets), # Added ! for emphasis
                                                 "balls": balls, "runs_this_ball": 0, "total_runs": runs, "wickets": wickets,
                                                 "batterTracker": copy.deepcopy(batterTracker), "bowlerTracker": copy.deepcopy(bowlerTracker),
                                                 "batsman": btn, "batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
-                                                "bowler": bln, "is_dismissal": False, "out_type_on_fh_nodismissal": out_type_actual, "is_free_hit_delivery": True, "original_event_type": event_type_param})
+                                                "bowler": bln, "is_dismissal": False, "out_type_on_fh_nodismissal": out_type_actual, "is_free_hit_delivery": True, "original_event_type": event_type_param}) # Ensure these params are logged
 
-                        if is_dismissal:
+                        if is_dismissal: # Proceed only if it's a valid dismissal
                             wickets += 1
                             out_desc = out_type_actual.title()
                             runs_off_wicket_ball = 0
@@ -1396,10 +1555,50 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                                                 "balls": balls, "runs_this_ball": runs_off_wicket_ball, "total_runs": runs, "wickets": wickets,
                                                 "batterTracker": copy.deepcopy(batterTracker), "bowlerTracker": copy.deepcopy(bowlerTracker),
                                                 "batsman": btn,"batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
-                                                "bowler": bln, "out_type": out_type_actual, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param})
+                                                "bowler": bln, "out_type": out_type_actual, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param}) # Ensure these params are logged
                             playerDismissed(current_batter)
 
                     else: # Dot ball, no wicket
+                        P_EXTRAS = 0.08 # Probability of byes/leg-byes on a dot ball
+                        if random.uniform(0,1) < P_EXTRAS and not is_fh_param : # Extras less likely on a free hit
+                            extras_kind = random.choice(['B', 'LB'])
+                            runs_off_extras = random.choice([1, 1, 1, 1, 2, 4]) # 1s more common
+
+                            runs += runs_off_extras
+                            # Byes/Leg-byes are not debited against bowler's runs conceded.
+
+                            print(current_over_str, f"{current_bowler['displayName']} to {current_batter['player']['displayName']}", f"{runs_off_extras} {extras_kind}!", "Score: " + str(runs) + "/" + str(wickets) + log_suffix)
+                            ball_log_str = f"{current_over_str}:{runs_off_extras}{extras_kind}"
+                            bowlerTracker[bln]['ballLog'].append(ball_log_str + "-EXTRAS")
+                            batterTracker[btn]['ballLog'].append(ball_log_str + "-EXTRAS")
+                            ballLog.append(ball_log_str)
+
+                            innings2Log.append({
+                                "event": current_over_str + f" {current_bowler['displayName']} to {current_batter['player']['displayName']} {runs_off_extras} {extras_kind}!" + " Score: " + str(runs) + "/" + str(wickets) + log_suffix,
+                                "balls": balls,
+                                "runs_this_ball": runs_off_extras,
+                                "total_runs": runs, "wickets": wickets,
+                                "batterTracker": copy.deepcopy(batterTracker),
+                                "bowlerTracker": copy.deepcopy(bowlerTracker),
+                                "batsman": btn, "batter1": batter1['player']['playerInitials'] if batter1 else 'N/A',
+                                "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
+                                "bowler": bln,
+                                "type": "EXTRAS",
+                                "extras_type": extras_kind,
+                                "is_free_hit_delivery": is_fh_param,
+                                "original_event_type": event_type_param
+                            })
+                            if runs_off_extras % 2 == 1:
+                                onStrike = batter2 if onStrike == batter1 else batter1
+                            # Innings End Checks after extras
+                            if runs >= target:
+                                targetChased = True; winner = battingName; winMsg = f"{battingName} won by {10 - wickets} wickets"
+                            elif wickets == 10 or (event_type_param == "LEGAL" and balls == 120):
+                                if runs < target -1 : winner = bowlingName; winMsg = f"{bowlingName} won by {(target-1)-runs} runs"
+                                elif runs == target-1: winner = "tie"; winMsg = "Match Tied"
+                            return # Processed as extras, exit
+
+                        # Standard Dot ball if no extras
                         print(current_over_str, f"{current_bowler['displayName']} to {current_batter['player']['displayName']}", "0", "Score: " + str(runs) + "/" + str(wickets) + log_suffix)
                         ball_log_str = f"{current_over_str}:0"
                         if is_fh_param: ball_log_str += "-FH"
@@ -1411,7 +1610,7 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                                             "balls": balls, "runs_this_ball": 0, "total_runs": runs, "wickets": wickets,
                                             "batterTracker": copy.deepcopy(batterTracker), "bowlerTracker": copy.deepcopy(bowlerTracker),
                                             "batsman": btn,"batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
-                                            "bowler": bln, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param})
+                                            "bowler": bln, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param}) # Ensure these params are logged
 
                 # Innings End Checks (specific to innings2)
                 if runs >= target:
@@ -1441,7 +1640,7 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                                             "balls": balls, "runs_this_ball": 0, "total_runs": runs, "wickets": wickets,
                                             "batterTracker": copy.deepcopy(batterTracker), "bowlerTracker": copy.deepcopy(bowlerTracker),
                                             "batsman": btn,"batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
-                                            "bowler": bln, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param, "fallback":True })
+                                            "bowler": bln, "is_free_hit_delivery": is_fh_param, "original_event_type": event_type_param, "fallback":True }) # Ensure these params are logged
         # Check innings end conditions after fallback too
         if runs >= target:
             targetChased = True
@@ -1459,49 +1658,49 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                  winMsg = "Match Tied"
 
     def playerDismissed(player):
-        nonlocal batter1, batter2, onStrike, targetChased
-        # print("OUT", player['player']['playerInitials'])
-        if(wickets == 10):
-            print("ALL OUT")
-        else:
-            if(batter1 == player):
-                onStrike = battingOrder[wickets + 1]
-                batter1 = battingOrder[wickets + 1]
-                found = False
-                index_l = 0
-                while(not found):
-                    # localBattingOrder = sorted(battingOrder, key=lambda k: k['posAvgsAll'][str(wickets)])
-                    # localBattingOrder.reverse()
-                    localBattingOrder = battingOrder
-                    if(batterTracker[localBattingOrder[index_l]['player']['playerInitials']]['balls'] == 0):
-                        onStrike = localBattingOrder[index_l]
-                        batter1 = localBattingOrder[index_l]
-                        found = True
-                    else:
-                        index_l += 1
+        nonlocal batter1, batter2, onStrike, targetChased, wickets, battingOrder, batterTracker # ensure all needed nonlocals
 
+        # 'wickets' has already been incremented before this function is called.
+        # It represents the total number of batsmen out (e.g., 1 after the 1st wicket).
+        if wickets == 10:
+            # print(f"Innings 2: All out. Total wickets: {wickets}")
+            # Game end conditions (win/loss/tie) are checked in getOutcome_standalone or main loop
+            if batter1 == player: batter1 = None
+            elif batter2 == player: batter2 = None
+            onStrike = None # No one on strike if all out
+            return
 
+        # Batting order: battingOrder[0], battingOrder[1], battingOrder[2], ...
+        # When the 1st wicket falls (wickets = 1), the new player is battingOrder[2]. Index is 2.
+        # This new player's index is 'wickets + 1'.
+        new_batter_index = wickets + 1
+
+        if new_batter_index < len(battingOrder): # Check if there's a valid next batsman
+            next_batter_info = battingOrder[new_batter_index]
+            if batter1 == player:
+                batter1 = next_batter_info
+            elif batter2 == player:
+                batter2 = next_batter_info
             else:
-                onStrike = battingOrder[wickets + 1]
-                batter2 = battingOrder[wickets + 1]
-                found = False
-                index_l = 0
-                while(not found):
-                    # localBattingOrder = sorted(battingOrder, key=lambda k: k['posAvgsAll'][str(wickets)])
-                    # localBattingOrder.reverse()
-                    localBattingOrder = battingOrder
-                    if(batterTracker[localBattingOrder[index_l]['player']['playerInitials']]['balls'] == 0):
-                        onStrike = localBattingOrder[index_l]
-                        batter2 = localBattingOrder[index_l]
-                        found = True
-                    else:
-                        index_l += 1
-             
-        # print(batter1['player']['playerInitials']) 
-        # print(batter2['player']['playerInitials'])
+                # This case implies 'player' was not one of the current batters, which is unexpected.
+                print(f"DEBUG WARNING (Innings 2 playerDismissed): Dismissed player {player['player']['playerInitials']} was not batter1 or batter2. Current batter1: {batter1['player']['playerInitials'] if batter1 else 'None'}, batter2: {batter2['player']['playerInitials'] if batter2 else 'None'}.")
+                # Fallback logic similar to innings1, though this state is highly problematic.
+                pass
 
-    def delivery(bowler, batter, over, is_free_hit=False):
-        nonlocal batterTracker, bowlerTracker, onStrike, ballLog, balls, runs, wickets, targetChased, spin, pace # Added spin, pace
+            onStrike = next_batter_info # New batter is on strike
+        else:
+            # Not enough players left or all out.
+            # print(f"Innings 2: All batters dismissed or batting order exhausted. Total wickets: {wickets}")
+            if batter1 == player:
+                batter1 = None
+            elif batter2 == player:
+                batter2 = None
+            onStrike = None # No one on strike
+
+        # The complex while loop trying to find a batter with 0 balls is removed.
+
+    def delivery(bowler, batter, over, is_free_hit=False): # is_free_hit is for the CURRENT ball
+        nonlocal batterTracker, bowlerTracker, onStrike, ballLog, balls, runs, wickets, targetChased, spin, pace
         global winner, winMsg, innings2Log
 
         blname = bowler['playerInitials']
@@ -1538,28 +1737,38 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
              outTypeAvg[a_key] = (batInfo['batOutTypesObject'].get(a_key,0) + bowlInfo['bowlOutTypesObject'].get(a_key,0)) / 2
         outTypeAvg['runOut'] = runoutChance
 
-        # No-ball check (using original bowler's noballRate)
+        # No-ball check (using original bowler stats)
         noballRate = bowlInfo_orig['bowlNoballRate']
         is_no_ball_event = noballRate > random.uniform(0,1)
 
         if is_no_ball_event:
-            runs += 1
+            runs += 1 # Penalty run
             bowlerTracker[blname]['runs'] += 1
-            bowlerTracker[blname]['noballs'] += 1
+            bowlerTracker[blname]['noballs'] += 1 # Increment noballs count
+
             print(over, f"{bowler['displayName']} to {batter['player']['displayName']}", "NO BALL!", "Score: " + str(runs) + "/" + str(wickets))
-            bowlerTracker[blname]['ballLog'].append(f"{over}:NB1")
+            bowlerTracker[blname]['ballLog'].append(f"{over}:NB+1")
+
             innings2Log.append({
                 "event": over + f" {bowler['displayName']} to {batter['player']['displayName']}" + " NO BALL!" + " Score: " + str(runs) + "/" + str(wickets),
-                "balls": balls, "runs": runs, "wickets": wickets, "batterTracker": copy.deepcopy(batterTracker),
-                "bowlerTracker": copy.deepcopy(bowlerTracker), "batsman": btname,
-                "batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
-                "bowler": blname, "type": "NO_BALL_CALL", "free_hit_active_on_delivery": True
+                "balls": balls, # Innings balls do not increment for NB call
+                "runs_this_ball": 1, # The penalty run
+                "total_runs": runs, "wickets": wickets,
+                "batterTracker": copy.deepcopy(batterTracker),
+                "bowlerTracker": copy.deepcopy(bowlerTracker),
+                "batsman": btname,
+                "batter1": batter1['player']['playerInitials'] if batter1 else 'N/A',
+                "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
+                "bowler": blname,
+                "type": "NO_BALL_CALL",
+                "is_free_hit_delivery": True, # Next ball outcome is FH
+                "original_event_type": "NB_CALL"
             })
             # Outcome of the no-ball delivery itself (is a free hit)
             getOutcome_standalone(bowler, batter, denAvg, outAvg, outTypeAvg, over, is_fh_param=True, event_type_param="NB")
             return "NO_BALL"
 
-        # Wide check (using original bowler's wideRate)
+        # Wide check (if not a no-ball)
         wideRate = bowlInfo_orig['bowlWideRate']
         is_wide_event = wideRate > random.uniform(0,1)
         if is_wide_event:
@@ -1569,13 +1778,23 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
             ballLog.append(f"{over}:WD")
             bowlerTracker[blname]['ballLog'].append(f"{over}:WD")
             innings2Log.append({"event": over + f" {bowler['displayName']} to {batter['player']['displayName']}" + " Wide" + " Score: " + str(runs) + "/" + str(wickets),
-                "balls": balls, "batterTracker": copy.deepcopy(batterTracker), "bowlerTracker": copy.deepcopy(bowlerTracker),
-                "batsman": btname,"batter1": batter1['player']['playerInitials'] if batter1 else 'N/A', "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
-                "bowler": blname, "runs": runs, "wickets": wickets, "type": "WIDE"})
+                "balls": balls, # Innings balls do not increment for Wide
+                "runs_this_ball": 1, # The penalty run
+                "total_runs": runs, "wickets": wickets,
+                "batterTracker": copy.deepcopy(batterTracker),
+                "bowlerTracker": copy.deepcopy(bowlerTracker),
+                "batsman": btname,
+                "batter1": batter1['player']['playerInitials'] if batter1 else 'N/A',
+                "batter2": batter2['player']['playerInitials'] if batter2 else 'N/A',
+                "bowler": blname,
+                "type": "WIDE",
+                "is_free_hit_delivery": is_free_hit, # Persist FH state
+                "original_event_type": "WIDE"
+            })
             return "WIDE"
 
-        # Legal Delivery
-        balls += 1 # Innings ball count for legal deliveries
+        # Legal Delivery (or a Free Hit delivery that wasn't a No Ball or Wide itself)
+        balls += 1 # Innings ball count increments only for legal deliveries
 
         # Aggression adjustments for innings2
         current_ball_of_innings = balls
@@ -1988,48 +2207,110 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
 
             candidates = [
                 b for b in designated_bowlers
-                if bowlerTracker[b['playerInitials']]['balls'] < 24 # Max 4 overs per bowler
+                if bowlerTracker[b['playerInitials']]['balls'] < 24
                    and b['playerInitials'] != last_bowler_initials
+                   and b['bowlOutsRate'] >= MIN_BOWLING_OUT_RATE_THRESHOLD
             ]
 
+            if not candidates: # Fallback 1: Designated bowlers, ignore last_bowler, but respect rate
+                candidates = [
+                    b for b in designated_bowlers
+                    if bowlerTracker[b['playerInitials']]['balls'] < 24
+                       and b['bowlOutsRate'] >= MIN_BOWLING_OUT_RATE_THRESHOLD
+                ]
+                if not candidates: # Fallback 2: Designated bowlers, ignore rate and last_bowler (original fallback)
+                    print(f"INFO: Innings2 Over {i+1}, Relaxing bowling rate threshold for designated bowlers (main candidates).")
+                    candidates = [
+                        b for b in designated_bowlers
+                        if bowlerTracker[b['playerInitials']]['balls'] < 24
+                           and b['playerInitials'] != last_bowler_initials # Try with this first
+                    ]
+                    if not candidates: # Fallback 2.1: Designated bowlers, ignore rate and last_bowler restriction
+                         candidates = [b for b in designated_bowlers if bowlerTracker[b['playerInitials']]['balls'] < 24]
+
+            # If still no designated bowlers after primary and fallbacks for designated:
             if not candidates:
-                candidates = [b for b in designated_bowlers if bowlerTracker[b['playerInitials']]['balls'] < 24]
-                if not candidates:
-                    non_designated_available = [
+                non_designated_candidates = [
+                    b for b in bowling_selection_pool
+                    if b['playerInitials'] not in [db['playerInitials'] for db in designated_bowlers]
+                       and bowlerTracker[b['playerInitials']]['balls'] < 24
+                       and b['playerInitials'] != last_bowler_initials
+                       and b['bowlOutsRate'] >= MIN_BOWLING_OUT_RATE_THRESHOLD
+                ]
+                if not non_designated_candidates: # Try non-designated without last_bowler restriction, with rate
+                    non_designated_candidates = [
+                        b for b in bowling_selection_pool
+                        if b['playerInitials'] not in [db['playerInitials'] for db in designated_bowlers]
+                           and bowlerTracker[b['playerInitials']]['balls'] < 24
+                           and b['bowlOutsRate'] >= MIN_BOWLING_OUT_RATE_THRESHOLD
+                    ]
+                if not non_designated_candidates: # Try non-designated, relaxing rate, with last_bowler restriction
+                    print(f"INFO: Innings2 Over {i+1}, Relaxing bowling rate threshold for non-designated bowlers.")
+                    non_designated_candidates = [
                         b for b in bowling_selection_pool
                         if b['playerInitials'] not in [db['playerInitials'] for db in designated_bowlers]
                            and bowlerTracker[b['playerInitials']]['balls'] < 24
                            and b['playerInitials'] != last_bowler_initials
                     ]
-                    if not non_designated_available:
-                         non_designated_available = [
+                    if not non_designated_candidates: # Try non-designated, relaxing rate, without last_bowler restriction
+                         non_designated_candidates = [
                             b for b in bowling_selection_pool
                             if b['playerInitials'] not in [db['playerInitials'] for db in designated_bowlers]
                                and bowlerTracker[b['playerInitials']]['balls'] < 24
                         ]
 
-                    if non_designated_available:
-                        current_bowler_obj = random.choice(non_designated_available)
-                    else: # Fallback if all designated and non-designated are bowled out or restricted
-                        print(f"WARNING: Innings2 Over {i+1}, All bowlers nearly maxed or restricted. Fallback.")
-                        least_bowled_candidates = sorted([b for b in designated_bowlers if bowlerTracker[b['playerInitials']]['balls'] < 24], key=lambda b_sort: bowlerTracker[b_sort['playerInitials']]['balls'])
-                        if least_bowled_candidates: current_bowler_obj = least_bowled_candidates[0]
-                        elif bowling_selection_pool: current_bowler_obj = bowling_selection_pool[0]
-                        else: current_bowler_obj = None
-                else: # If only candidates who bowled last over are available
-                    current_bowler_obj = random.choice(candidates)
-            else: # If there are candidates who didn't bowl the last over
+                if non_designated_candidates:
+                    # Select from non_designated_candidates, potentially phase-aware if desired, or random
+                    current_bowler_obj = random.choice(non_designated_candidates)
+                else:
+                    # Ultimate fallback: least bowled designated bowler, ignoring rate and last_bowler entirely
+                    print(f"WARNING: Innings2 Over {i+1}, All preferred bowlers nearly maxed or below rate. Fallback to least bowled designated.")
+                    least_bowled_candidates = sorted(
+                        [b_sort for b_sort in designated_bowlers if bowlerTracker[b_sort['playerInitials']]['balls'] < 24],
+                        key=lambda b_lambda: bowlerTracker[b_lambda['playerInitials']]['balls']
+                    )
+                    if least_bowled_candidates:
+                        current_bowler_obj = least_bowled_candidates[0]
+                    elif bowling_selection_pool:
+                        current_bowler_obj = random.choice([b for b in bowling_selection_pool if bowlerTracker[b['playerInitials']]['balls'] < 24] or bowling_selection_pool)
+                    else:
+                        current_bowler_obj = None
+
+            # If candidates were found (either primary designated, fallback designated, or non-designated selected above)
+            if current_bowler_obj is None and candidates:
+                chosen_bowler_initials_for_rotation = None
                 phase_preferred_list_objs = []
                 if phase == "PP": phase_preferred_list_objs = designated_opening_bowlers
                 elif phase == "MID": phase_preferred_list_objs = designated_middle_bowlers
                 else: phase_preferred_list_objs = designated_death_bowlers
 
-                phase_candidates = [b for b in candidates if b['playerInitials'] in [p['playerInitials'] for p in phase_preferred_list_objs]]
+                final_phase_candidates = [b for b in candidates if b['playerInitials'] in [p['playerInitials'] for p in phase_preferred_list_objs]]
 
-                if phase_candidates:
-                    current_bowler_obj = random.choice(phase_candidates)
-                else: # If no phase-specific candidates, choose from general candidates
-                    current_bowler_obj = random.choice(candidates)
+                if final_phase_candidates:
+                    for bowler_initials_in_rotation in list(designated_bowler_rotation_list):
+                        potential_bowler = next((b for b in final_phase_candidates if b['playerInitials'] == bowler_initials_in_rotation), None)
+                        if potential_bowler:
+                            current_bowler_obj = potential_bowler
+                            chosen_bowler_initials_for_rotation = bowler_initials_in_rotation
+                            break
+                    if not chosen_bowler_initials_for_rotation:
+                        current_bowler_obj = random.choice(final_phase_candidates)
+                elif candidates: # No phase specific, but general candidates exist
+                    for bowler_initials_in_rotation in list(designated_bowler_rotation_list):
+                        potential_bowler = next((b for b in candidates if b['playerInitials'] == bowler_initials_in_rotation), None)
+                        if potential_bowler:
+                            current_bowler_obj = potential_bowler
+                            chosen_bowler_initials_for_rotation = bowler_initials_in_rotation
+                            break
+                    if not chosen_bowler_initials_for_rotation:
+                        current_bowler_obj = random.choice(candidates)
+
+                if chosen_bowler_initials_for_rotation:
+                    designated_bowler_rotation_list.remove(chosen_bowler_initials_for_rotation)
+                    designated_bowler_rotation_list.append(chosen_bowler_initials_for_rotation)
+                elif current_bowler_obj and current_bowler_obj['playerInitials'] in designated_bowler_rotation_list: # Chosen by random from filtered lists
+                     designated_bowler_rotation_list.remove(current_bowler_obj['playerInitials'])
+                     designated_bowler_rotation_list.append(current_bowler_obj['playerInitials'])
 
         if not current_bowler_obj:
             if bowling_selection_pool:
