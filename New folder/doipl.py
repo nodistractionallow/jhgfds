@@ -190,32 +190,22 @@ def display_scorecard(bat_tracker, bowl_tracker, team_name, innings_num):
     
     # Batting Scorecard
     batsmanTabulate = []
-    for player in bat_tracker:
-        data = bat_tracker[player]
-        runs = data['runs']
-        balls = data['balls']
-        sr = round((runs / balls) * 100, 2) if balls else 'NA'
-        how_out = "DNB"
-        batted = False
-        for log in data['ballLog']:
-            batted = True
-            if "W" in log:
-                if "CaughtBy" in log:
-                    split_log = log.split("-")
-                    catcher = split_log[2]
-                    bowler = split_log[-1]
-                    how_out = f"c {catcher} b {bowler}"
-                elif "runout" in log:
-                    how_out = "Run out"
-                else:
-                    split_log = log.split("-")
-                    out_type = split_log[1]
-                    bowler = split_log[-1]
-                    how_out = f"{out_type} b {bowler}"
-            else:
-                how_out = "Not out" if balls > 0 else "DNB"
-        if batted or balls > 0:
-            batsmanTabulate.append([player, runs, balls, sr, how_out])
+    for player_name_key in bat_tracker: # player_name_key is player's name/initials from bat_tracker keys
+        data = bat_tracker[player_name_key]
+        runs_scored = data['runs']
+        balls_faced = data['balls']
+
+        # Get pre-calculated dismissal status from mainconnect.py (via bat_tracker)
+        # Assuming 'how_out_string' is the key set in mainconnect.py's batterTracker
+        how_out_status = data.get('how_out_string', 'DNB')
+
+        sr_val = 'NA'
+        if balls_faced > 0:
+            sr_val = round((runs_scored / balls_faced) * 100, 2)
+        elif how_out_status not in ['DNB', 'Did Not Bat']: # Handles 'Not out' with 0 balls
+            sr_val = '-'
+
+        batsmanTabulate.append([player_name_key, runs_scored, balls_faced, sr_val, how_out_status])
     
     print("\nBatting:")
     print(tabulate(batsmanTabulate, headers=["Player", "Runs", "Balls", "SR", "How Out"], tablefmt="grid"))
@@ -367,8 +357,7 @@ for team1, team2 in scheduled_matches_final:
 
     try:
         input("Press Enter to start the match...")
-            
-            print(random.choice(commentary_lines['start']))
+        print(random.choice(commentary_lines['start']))
             
             resList = game(False, team1, team2)
 
