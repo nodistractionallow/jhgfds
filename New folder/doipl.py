@@ -319,14 +319,54 @@ def display_ball_by_ball(innings_log, innings_num, team_name, runs, balls, wicke
     # Display scorecard after innings
     display_scorecard(bat_tracker, bowl_tracker, team_name, innings_num)
 
-# League Matches
-for i in range(len(teams)):
-    for j in range(i + 1, len(teams)):
-        team1, team2 = teams[i], teams[j]
-        print(f"\nMatch: {team1.upper()} vs {team2.upper()}")
-        
-        try:
-            input("Press Enter to start the match...")
+# New League Scheduling Algorithm
+all_possible_matches = []
+for i_team_idx in range(len(teams)):
+    for j_team_idx in range(i_team_idx + 1, len(teams)):
+        all_possible_matches.append((teams[i_team_idx], teams[j_team_idx]))
+
+random.shuffle(all_possible_matches)
+
+scheduled_matches_final = []
+teams_in_last_scheduled_match = set()
+match_pool_copy = list(all_possible_matches)
+
+while len(scheduled_matches_final) < len(all_possible_matches):
+    found_this_slot = False
+    best_match_found = None
+
+    candidate_match_idx_to_pop = -1
+
+    for candidate_idx, candidate_match in enumerate(match_pool_copy):
+        teamA, teamB = candidate_match
+        if teamA not in teams_in_last_scheduled_match and teamB not in teams_in_last_scheduled_match:
+            best_match_found = candidate_match
+            candidate_match_idx_to_pop = candidate_idx
+            found_this_slot = True
+            break
+
+    if found_this_slot and best_match_found is not None:
+        # Remove from pool by index
+        match_pool_copy.pop(candidate_match_idx_to_pop)
+    elif not found_this_slot:
+        if match_pool_copy: # If there are still matches to schedule
+            best_match_found = match_pool_copy.pop(0) # Take the first one
+        else:
+            break # No matches left
+
+    if best_match_found:
+        scheduled_matches_final.append(best_match_found)
+        teams_in_last_scheduled_match = {best_match_found[0], best_match_found[1]}
+    elif not match_pool_copy and len(scheduled_matches_final) < len(all_possible_matches):
+        print("Error: Match pool empty but not all matches scheduled. Breaking.")
+        break
+
+# League Matches using the new schedule
+for team1, team2 in scheduled_matches_final:
+    print(f"\nMatch: {team1.upper()} vs {team2.upper()}")
+
+    try:
+        input("Press Enter to start the match...")
             
             print(random.choice(commentary_lines['start']))
             
