@@ -525,7 +525,7 @@ def playoffs(team1, team2, matchtag):
 
         return winner, loser
 
-    except Exception as e: # Ensuring this aligns with the 'try' block
+    except Exception as e:
         print(f"Error during {matchtag.upper()}: {str(e)}")
         input("Press Enter to continue or Ctrl+C to exit...")
         return team1, team2  # Default to team1 as winner to continue playoffs
