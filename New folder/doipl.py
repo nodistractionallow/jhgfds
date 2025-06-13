@@ -358,98 +358,98 @@ for team1, team2 in scheduled_matches_final:
     try:
         input("Press Enter to start the match...")
         print(random.choice(commentary_lines['start']))
-            
-            resList = game(False, team1, team2)
 
-            # Display ball-by-ball and innings summary for both innings
-            for innings, team_key, runs_key, balls_key, bat_tracker_key, bowl_tracker_key in [
-                ('innings1Log', 'innings1BatTeam', 'innings1Runs', 'innings1Balls', 'innings1Battracker', 'innings1Bowltracker'),
-                ('innings2Log', 'innings2BatTeam', 'innings2Runs', 'innings2Balls', 'innings2Battracker', 'innings2Bowltracker')
-            ]:
-                display_ball_by_ball(
-                    resList[innings],
-                    1 if innings == 'innings1Log' else 2,
-                    resList[team_key],
-                    resList[runs_key],
-                    resList[balls_key],
-                    max([event['wickets'] for event in resList[innings]], default=0),
-                    resList[bat_tracker_key],
-                    resList[bowl_tracker_key]
-                )
+        resList = game(False, team1, team2)
 
-            print(f"\nResult: {resList['winMsg']}")
-            print(random.choice(commentary_lines['end']))
+        # Display ball-by-ball and innings summary for both innings
+        for innings, team_key, runs_key, balls_key, bat_tracker_key, bowl_tracker_key in [
+            ('innings1Log', 'innings1BatTeam', 'innings1Runs', 'innings1Balls', 'innings1Battracker', 'innings1Bowltracker'),
+            ('innings2Log', 'innings2BatTeam', 'innings2Runs', 'innings2Balls', 'innings2Battracker', 'innings2Bowltracker')
+        ]:
+            display_ball_by_ball(
+                resList[innings],
+                1 if innings == 'innings1Log' else 2,
+                resList[team_key],
+                resList[runs_key],
+                resList[balls_key],
+                max([event['wickets'] for event in resList[innings]], default=0),
+                resList[bat_tracker_key],
+                resList[bowl_tracker_key]
+            )
 
-            # Track batting/bowling format win
-            if "runs" in resList['winMsg']:
-                battingf += 1
-            else:
-                bowlingf += 1
+        print(f"\nResult: {resList['winMsg']}")
+        print(random.choice(commentary_lines['end']))
 
-            # Update batting stats
-            for bat_map in [('innings1Battracker', 'innings1BatTeam'), ('innings2Battracker', 'innings2BatTeam')]:
-                bat_tracker = resList[bat_map[0]]
-                for player in bat_tracker:
-                    if player not in battingInfo:
-                        battingInfo[player] = copy.deepcopy(bat_tracker[player])
-                        battingInfo[player]['innings'] = 1
-                        battingInfo[player]['scoresArray'] = [int(battingInfo[player]['runs'])]
-                    else:
-                        battingInfo[player]['balls'] += bat_tracker[player]['balls']
-                        battingInfo[player]['runs'] += bat_tracker[player]['runs']
-                        battingInfo[player]['ballLog'] += bat_tracker[player]['ballLog']
-                        battingInfo[player]['innings'] += 1
-                        battingInfo[player]['scoresArray'].append(int(bat_tracker[player]['runs']))
+        # Track batting/bowling format win
+        if "runs" in resList['winMsg']:
+            battingf += 1
+        else:
+            bowlingf += 1
 
-            # Update bowling stats
-            for bowl_map in [('innings1Bowltracker',), ('innings2Bowltracker',)]:
-                bowl_tracker = resList[bowl_map[0]]
-                for player in bowl_tracker:
-                    if player not in bowlingInfo:
-                        bowlingInfo[player] = copy.deepcopy(bowl_tracker[player])
-                        bowlingInfo[player]['matches'] = 1
-                    else:
-                        bowlingInfo[player]['balls'] += bowl_tracker[player]['balls']
-                        bowlingInfo[player]['runs'] += bowl_tracker[player]['runs']
-                        bowlingInfo[player]['ballLog'] += bowl_tracker[player]['ballLog']
-                        bowlingInfo[player]['wickets'] += bowl_tracker[player]['wickets']
-                        bowlingInfo[player]['noballs'] = bowlingInfo[player].get('noballs', 0) + bowl_tracker[player].get('noballs', 0) # Aggregate noballs
-                        bowlingInfo[player]['matches'] += 1
+        # Update batting stats
+        for bat_map in [('innings1Battracker', 'innings1BatTeam'), ('innings2Battracker', 'innings2BatTeam')]:
+            bat_tracker = resList[bat_map[0]]
+            for player in bat_tracker:
+                if player not in battingInfo:
+                    battingInfo[player] = copy.deepcopy(bat_tracker[player])
+                    battingInfo[player]['innings'] = 1
+                    battingInfo[player]['scoresArray'] = [int(battingInfo[player]['runs'])]
+                else:
+                    battingInfo[player]['balls'] += bat_tracker[player]['balls']
+                    battingInfo[player]['runs'] += bat_tracker[player]['runs']
+                    battingInfo[player]['ballLog'] += bat_tracker[player]['ballLog']
+                    battingInfo[player]['innings'] += 1
+                    battingInfo[player]['scoresArray'].append(int(bat_tracker[player]['runs']))
 
-            # Points Table Update
-            teamA = resList['innings1BatTeam']
-            teamB = resList['innings2BatTeam']
-            teamARuns, teamABalls = resList['innings1Runs'], resList['innings1Balls']
-            teamBRuns, teamBBalls = resList['innings2Runs'], resList['innings2Balls']
-            winner = resList['winner']
-            loser = team1 if winner == team2 else team2
+        # Update bowling stats
+        for bowl_map in [('innings1Bowltracker',), ('innings2Bowltracker',)]:
+            bowl_tracker = resList[bowl_map[0]]
+            for player in bowl_tracker:
+                if player not in bowlingInfo:
+                    bowlingInfo[player] = copy.deepcopy(bowl_tracker[player])
+                    bowlingInfo[player]['matches'] = 1
+                else:
+                    bowlingInfo[player]['balls'] += bowl_tracker[player]['balls']
+                    bowlingInfo[player]['runs'] += bowl_tracker[player]['runs']
+                    bowlingInfo[player]['ballLog'] += bowl_tracker[player]['ballLog']
+                    bowlingInfo[player]['wickets'] += bowl_tracker[player]['wickets']
+                    bowlingInfo[player]['noballs'] = bowlingInfo[player].get('noballs', 0) + bowl_tracker[player].get('noballs', 0) # Aggregate noballs
+                    bowlingInfo[player]['matches'] += 1
 
+        # Points Table Update
+        teamA = resList['innings1BatTeam']
+        teamB = resList['innings2BatTeam']
+        teamARuns, teamABalls = resList['innings1Runs'], resList['innings1Balls']
+        teamBRuns, teamBBalls = resList['innings2Runs'], resList['innings2Balls']
+        winner = resList['winner']
+        loser = team1 if winner == team2 else team2
+
+        for t in [team1, team2]:
+            points[t]['P'] += 1
+
+        if winner == "tie":
             for t in [team1, team2]:
-                points[t]['P'] += 1
+                points[t]['T'] += 1
+                points[t]['pts'] += 1
+        else:
+            points[winner]['W'] += 1
+            points[loser]['L'] += 1
+            points[winner]['pts'] += 2
 
-            if winner == "tie":
-                for t in [team1, team2]:
-                    points[t]['T'] += 1
-                    points[t]['pts'] += 1
-            else:
-                points[winner]['W'] += 1
-                points[loser]['L'] += 1
-                points[winner]['pts'] += 2
+        points[teamA]['runsScored'] += teamARuns
+        points[teamB]['runsScored'] += teamBRuns
+        points[teamA]['runsConceded'] += teamBRuns
+        points[teamB]['runsConceded'] += teamARuns
+        points[teamA]['ballsFaced'] += teamABalls
+        points[teamB]['ballsFaced'] += teamBBalls
+        points[teamA]['ballsBowled'] += teamBBalls
+        points[teamB]['ballsBowled'] += teamABalls
 
-            points[teamA]['runsScored'] += teamARuns
-            points[teamB]['runsScored'] += teamBRuns
-            points[teamA]['runsConceded'] += teamBRuns
-            points[teamB]['runsConceded'] += teamARuns
-            points[teamA]['ballsFaced'] += teamABalls
-            points[teamB]['ballsFaced'] += teamBBalls
-            points[teamA]['ballsBowled'] += teamBBalls
-            points[teamB]['ballsBowled'] += teamABalls
+        display_points_table()
+        display_top_players()
 
-            display_points_table()
-            display_top_players()
-
-            # Pause after match to keep console open
-            input("Press Enter to continue to the next match...")
+        # Pause after match to keep console open
+        input("Press Enter to continue to the next match...")
 
         except Exception as e:
             print(f"Error during match {team1.upper()} vs {team2.upper()}: {str(e)}")
