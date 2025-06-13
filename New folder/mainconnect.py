@@ -1494,8 +1494,11 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                         onStrike = batter2 if onStrike == batter1 else batter1
                 else: # Dot ball (runs_on_this_ball == 0)
                     dot_ball_prob = den_avg_param.get('0', 0)
-                    if dot_ball_prob == 0: dot_ball_prob = 1
-                    probOut_val = out_avg_param * (total_den_prob / dot_ball_prob if dot_ball_prob else 1)
+                    # if dot_ball_prob == 0: dot_ball_prob = 1 # Original avoidance
+                    # New logic:
+                    dot_ball_multiplier = (total_den_prob / dot_ball_prob if dot_ball_prob > 1e-9 else 1)
+                    capped_multiplier = min(dot_ball_multiplier, 2.5) # Apply the cap
+                    probOut_val = out_avg_param * capped_multiplier
                     outDecider = random.uniform(0, 1)
 
                     if probOut_val > outDecider: # WICKET
@@ -1820,7 +1823,7 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
         # Simplified aggression logic for Innings 2 (can be expanded)
         if current_ball_of_innings <= 36 : # Powerplay
             if rrr > 9: # High required rate
-                outAvg = max(0.001, outAvg + 0.02) # Increase risk
+                outAvg = max(0.001, outAvg + 0.01) # Increase risk # MODIFIED: Halved from 0.02
                 for r_key in ['4','6']: denAvg[r_key] = max(0.001, denAvg.get(r_key,0) * 1.2)
                 for r_key in ['0','1']: denAvg[r_key] = max(0.001, denAvg.get(r_key,0) * 0.8)
             elif rrr < 6: # Low required rate
@@ -1828,13 +1831,13 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                  outAvg = max(0.001, outAvg - 0.01)
         elif current_ball_of_innings > 90: # Death overs
             if rrr > 7:
-                outAvg = max(0.001, outAvg + 0.03)
+                outAvg = max(0.001, outAvg + 0.015) # MODIFIED: Halved from 0.03
                 for r_key in ['4','6']: denAvg[r_key] = max(0.001, denAvg.get(r_key,0) * 1.3)
                 for r_key in ['0','1']: denAvg[r_key] = max(0.001, denAvg.get(r_key,0) * 0.7)
 
         # Batter-specific aggression (settled, new batter etc.)
         if batterTracker[btname]['balls'] < 8 : # New batter
-            outAvg = max(0.001, outAvg + 0.015) # Slightly higher out chance
+            outAvg = max(0.001, outAvg + 0.0075) # Slightly higher out chance # MODIFIED: Halved from 0.015
             for r_key in ['0','1']: denAvg[r_key] = max(0.001, denAvg.get(r_key,0) * 1.1)
             for r_key in ['4','6']: denAvg[r_key] = max(0.001, denAvg.get(r_key,0) * 0.9)
 
