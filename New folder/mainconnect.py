@@ -634,6 +634,7 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                             is_dismissal = False
                             print(current_over_str, f"{current_bowler['displayName']} to {current_batter['player']['displayName']}", f"NOT OUT ({out_type_actual} on Free Hit!)", "Score: " + str(runs) + "/" + str(wickets))
                             ball_log_str = f"{current_over_str}:0-{out_type_actual}-FH-NotOut"
+                            batterTracker[btn]['ballLog'].append(ball_log_str) # <-- ADDED LINE
                             # Log non-dismissal event for free hit
                             innings1Log.append({"event": current_over_str + f" {current_bowler['displayName']} to {current_batter['player']['displayName']}" + f" DOT BALL ({out_type_actual} on Free Hit - Not Out!)" + " Score: " + str(runs) + "/" + str(wickets), # Added ! for emphasis
                                                 "balls": balls, "runs_this_ball": 0, "total_runs": runs, "wickets": wickets,
@@ -1526,6 +1527,7 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                             is_dismissal = False
                             print(current_over_str, f"{current_bowler['displayName']} to {current_batter['player']['displayName']}", f"NOT OUT ({out_type_actual} on Free Hit!)", "Score: " + str(runs) + "/" + str(wickets))
                             ball_log_str = f"{current_over_str}:0-{out_type_actual}-FH-NotOut"
+                            batterTracker[btn]['ballLog'].append(ball_log_str) # <-- ADDED LINE
                             innings2Log.append({"event": current_over_str + f" {current_bowler['displayName']} to {current_batter['player']['displayName']}" + f" DOT BALL ({out_type_actual} on Free Hit - Not Out!)" + " Score: " + str(runs) + "/" + str(wickets), # Added ! for emphasis
                                                 "balls": balls, "runs_this_ball": 0, "total_runs": runs, "wickets": wickets,
                                                 "batterTracker": copy.deepcopy(batterTracker), "bowlerTracker": copy.deepcopy(bowlerTracker),
