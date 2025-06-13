@@ -1148,7 +1148,7 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                 if player_considered_in:
                     dismissal_status = "Not out"
                 # Else, remains "DNB" if not in this range and didn't bat.
-
+        player_specific_data['how_out_string'] = dismissal_status # <-- ADDED LINE
         batsmanTabulate.append([btckd_player_initials, runs_scored, balls_faced, sr_val, dismissal_status])
         
     bowlerTabulate = []
@@ -2426,7 +2426,7 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                 if player_considered_in:
                     dismissal_status = "Not out"
                 # Else, remains "DNB" if not in this range and didn't bat.
-
+        player_specific_data['how_out_string'] = dismissal_status # <-- ADDED LINE
         batsmanTabulate.append([btckd_player_initials, runs_scored, balls_faced, sr_val, dismissal_status])
         
     bowlerTabulate = []
