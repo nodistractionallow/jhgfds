@@ -351,8 +351,26 @@ while len(scheduled_matches_final) < len(all_possible_matches):
         print("Error: Match pool empty but not all matches scheduled. Breaking.")
         break
 
+matches_with_rain_chance = set()
+if scheduled_matches_final: # Ensure there are matches to select from
+    num_rain_matches = random.randint(1, 3)
+    num_rain_matches = min(num_rain_matches, len(scheduled_matches_final))
+
+    if num_rain_matches > 0: # Only sample if we need to select matches
+        # Ensure sampling count does not exceed population size if len(scheduled_matches_final) is small
+        sample_count = min(num_rain_matches, len(scheduled_matches_final))
+        if sample_count > 0:
+             rain_match_indices = random.sample(range(len(scheduled_matches_final)), sample_count)
+             for index in rain_match_indices:
+                matches_with_rain_chance.add(scheduled_matches_final[index])
+
+        # print(f"DEBUG: Matches selected for potential rain: {matches_with_rain_chance}") # For debugging
+
 # League Matches using the new schedule
 for team1, team2 in scheduled_matches_final:
+    current_match_tuple = (team1, team2)
+    rain_expected_for_this_match = current_match_tuple in matches_with_rain_chance
+    # print(f"DEBUG: Match {team1} vs {team2}, Rain Expected: {rain_expected_for_this_match}") # For debugging
     print(f"\nMatch: {team1.upper()} vs {team2.upper()}")
 
     try:
@@ -431,33 +449,78 @@ for team1, team2 in scheduled_matches_final:
             if teamB_actual in points:
                 points[teamB_actual]['SO'] += 1
 
-        teamA = resList['innings1BatTeam'] # Keep these for subsequent logic as they were
-        teamB = resList['innings2BatTeam']
-        teamARuns, teamABalls = resList['innings1Runs'], resList['innings1Balls']
-        teamBRuns, teamBBalls = resList['innings2Runs'], resList['innings2Balls']
-        winner = resList['winner']
-        loser = team1 if winner == team2 else team2
+        winner_status = resList.get('winner')
 
-        for t in [team1, team2]:
-            points[t]['P'] += 1
+        # Increment Played count for both teams involved in the scheduled match
+        # team1 and team2 are from the scheduled_matches_final loop
+        points[team1]['P'] += 1
+        points[team2]['P'] += 1
 
-        if winner == "tie":
-            for t in [team1, team2]:
-                points[t]['T'] += 1
-                points[t]['pts'] += 1
-        else:
-            points[winner]['W'] += 1
-            points[loser]['L'] += 1
-            points[winner]['pts'] += 2
+        # SO count update (should be independent of cancelled status if superOverPlayed is false for cancelled)
+        # This needs to use actual team names from resList if a match (even a tie that went to SO) was played.
+        if resList.get('superOverPlayed', False):
+            teamA_actual_for_so = resList.get('innings1BatTeam') # Use .get for safety
+            teamB_actual_for_so = resList.get('innings2BatTeam') # Use .get for safety
+            if teamA_actual_for_so and teamB_actual_for_so: # Ensure valid team names from resList
+                 if teamA_actual_for_so in points: points[teamA_actual_for_so]['SO'] += 1
+                 if teamB_actual_for_so in points: points[teamB_actual_for_so]['SO'] += 1
+            elif team1 in points and team2 in points: # Fallback to loop teams if resList doesn't have them (should not happen if SO played)
+                 points[team1]['SO'] +=1
+                 points[team2]['SO'] +=1
 
-        points[teamA]['runsScored'] += teamARuns
-        points[teamB]['runsScored'] += teamBRuns
-        points[teamA]['runsConceded'] += teamBRuns
-        points[teamB]['runsConceded'] += teamARuns
-        points[teamA]['ballsFaced'] += teamABalls
-        points[teamB]['ballsFaced'] += teamBBalls
-        points[teamA]['ballsBowled'] += teamBBalls
-        points[teamB]['ballsBowled'] += teamABalls
+
+        if winner_status == "cancelled":
+            points[team1]['T'] += 1
+            points[team2]['T'] += 1
+            points[team1]['pts'] += 1
+            points[team2]['pts'] += 1
+            # NRR components are NOT updated as no play occurred.
+            print(f"Match {team1.upper()} vs {team2.upper()} cancelled. Points shared.")
+        elif winner_status == "tie":
+            # For NRR, we need the actual teams that played, from resList
+            teamA_actual = resList['innings1BatTeam']
+            teamB_actual = resList['innings2BatTeam']
+            teamARuns, teamABalls = resList['innings1Runs'], resList['innings1Balls']
+            teamBRuns, teamBBalls = resList['innings2Runs'], resList['innings2Balls']
+
+            points[teamA_actual]['T'] += 1
+            points[teamB_actual]['T'] += 1
+            points[teamA_actual]['pts'] += 1
+            points[teamB_actual]['pts'] += 1
+
+            points[teamA_actual]['runsScored'] += teamARuns
+            points[teamB_actual]['runsScored'] += teamBRuns
+            points[teamA_actual]['runsConceded'] += teamBRuns
+            points[teamB_actual]['runsConceded'] += teamARuns
+            points[teamA_actual]['ballsFaced'] += teamABalls
+            points[teamB_actual]['ballsFaced'] += teamBBalls
+            points[teamA_actual]['ballsBowled'] += teamBBalls
+            points[teamB_actual]['ballsBowled'] += teamABalls
+        else: # Actual win/loss
+            # winner_status here is the name of the winning team from resList['winner']
+            # For NRR and other stats, use actual teams that played from resList
+            teamA_actual = resList['innings1BatTeam']
+            teamB_actual = resList['innings2BatTeam']
+            teamARuns, teamABalls = resList['innings1Runs'], resList['innings1Balls']
+            teamBRuns, teamBBalls = resList['innings2Runs'], resList['innings2Balls']
+
+            # Determine loser based on scheduled teams (team1, team2) and actual winner_status
+            loser = team1 if winner_status == team2 else team2
+
+            if winner_status in points: # Check if winner_status is a valid team key
+                points[winner_status]['W'] += 1
+                points[winner_status]['pts'] += 2
+            if loser in points: # Check if loser is a valid team key
+                points[loser]['L'] += 1
+
+            points[teamA_actual]['runsScored'] += teamARuns
+            points[teamB_actual]['runsScored'] += teamBRuns
+            points[teamA_actual]['runsConceded'] += teamBRuns
+            points[teamB_actual]['runsConceded'] += teamARuns
+            points[teamA_actual]['ballsFaced'] += teamABalls
+            points[teamB_actual]['ballsFaced'] += teamBBalls
+            points[teamA_actual]['ballsBowled'] += teamBBalls
+            points[teamB_actual]['ballsBowled'] += teamABalls
 
         display_points_table()
         display_top_players()

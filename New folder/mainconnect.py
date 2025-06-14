@@ -634,7 +634,6 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                             is_dismissal = False
                             print(current_over_str, f"{current_bowler['displayName']} to {current_batter['player']['displayName']}", f"NOT OUT ({out_type_actual} on Free Hit!)", "Score: " + str(runs) + "/" + str(wickets))
                             ball_log_str = f"{current_over_str}:0-{out_type_actual}-FH-NotOut"
-                            batterTracker[btn]['ballLog'].append(ball_log_str) # <-- ADDED LINE
                             # Log non-dismissal event for free hit
                             innings1Log.append({"event": current_over_str + f" {current_bowler['displayName']} to {current_batter['player']['displayName']}" + f" DOT BALL ({out_type_actual} on Free Hit - Not Out!)" + " Score: " + str(runs) + "/" + str(wickets), # Added ! for emphasis
                                                 "balls": balls, "runs_this_ball": 0, "total_runs": runs, "wickets": wickets,
@@ -1148,7 +1147,7 @@ def innings1(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                 if player_considered_in:
                     dismissal_status = "Not out"
                 # Else, remains "DNB" if not in this range and didn't bat.
-        player_specific_data['how_out_string'] = dismissal_status # <-- ADDED LINE
+
         batsmanTabulate.append([btckd_player_initials, runs_scored, balls_faced, sr_val, dismissal_status])
         
     bowlerTabulate = []
@@ -1495,11 +1494,8 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                         onStrike = batter2 if onStrike == batter1 else batter1
                 else: # Dot ball (runs_on_this_ball == 0)
                     dot_ball_prob = den_avg_param.get('0', 0)
-                    # if dot_ball_prob == 0: dot_ball_prob = 1 # Original avoidance
-                    # New logic:
-                    dot_ball_multiplier = (total_den_prob / dot_ball_prob if dot_ball_prob > 1e-9 else 1)
-                    capped_multiplier = min(dot_ball_multiplier, 2.5) # Apply the cap
-                    probOut_val = out_avg_param * capped_multiplier
+                    if dot_ball_prob == 0: dot_ball_prob = 1
+                    probOut_val = out_avg_param * (total_den_prob / dot_ball_prob if dot_ball_prob else 1)
                     outDecider = random.uniform(0, 1)
 
                     if probOut_val > outDecider: # WICKET
@@ -1527,7 +1523,6 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                             is_dismissal = False
                             print(current_over_str, f"{current_bowler['displayName']} to {current_batter['player']['displayName']}", f"NOT OUT ({out_type_actual} on Free Hit!)", "Score: " + str(runs) + "/" + str(wickets))
                             ball_log_str = f"{current_over_str}:0-{out_type_actual}-FH-NotOut"
-                            batterTracker[btn]['ballLog'].append(ball_log_str) # <-- ADDED LINE
                             innings2Log.append({"event": current_over_str + f" {current_bowler['displayName']} to {current_batter['player']['displayName']}" + f" DOT BALL ({out_type_actual} on Free Hit - Not Out!)" + " Score: " + str(runs) + "/" + str(wickets), # Added ! for emphasis
                                                 "balls": balls, "runs_this_ball": 0, "total_runs": runs, "wickets": wickets,
                                                 "batterTracker": copy.deepcopy(batterTracker), "bowlerTracker": copy.deepcopy(bowlerTracker),
@@ -1825,7 +1820,7 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
         # Simplified aggression logic for Innings 2 (can be expanded)
         if current_ball_of_innings <= 36 : # Powerplay
             if rrr > 9: # High required rate
-                outAvg = max(0.001, outAvg + 0.01) # Increase risk # MODIFIED: Halved from 0.02
+                outAvg = max(0.001, outAvg + 0.02) # Increase risk
                 for r_key in ['4','6']: denAvg[r_key] = max(0.001, denAvg.get(r_key,0) * 1.2)
                 for r_key in ['0','1']: denAvg[r_key] = max(0.001, denAvg.get(r_key,0) * 0.8)
             elif rrr < 6: # Low required rate
@@ -1833,13 +1828,13 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                  outAvg = max(0.001, outAvg - 0.01)
         elif current_ball_of_innings > 90: # Death overs
             if rrr > 7:
-                outAvg = max(0.001, outAvg + 0.015) # MODIFIED: Halved from 0.03
+                outAvg = max(0.001, outAvg + 0.03)
                 for r_key in ['4','6']: denAvg[r_key] = max(0.001, denAvg.get(r_key,0) * 1.3)
                 for r_key in ['0','1']: denAvg[r_key] = max(0.001, denAvg.get(r_key,0) * 0.7)
 
         # Batter-specific aggression (settled, new batter etc.)
         if batterTracker[btname]['balls'] < 8 : # New batter
-            outAvg = max(0.001, outAvg + 0.0075) # Slightly higher out chance # MODIFIED: Halved from 0.015
+            outAvg = max(0.001, outAvg + 0.015) # Slightly higher out chance
             for r_key in ['0','1']: denAvg[r_key] = max(0.001, denAvg.get(r_key,0) * 1.1)
             for r_key in ['4','6']: denAvg[r_key] = max(0.001, denAvg.get(r_key,0) * 0.9)
 
@@ -2426,7 +2421,7 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
                 if player_considered_in:
                     dismissal_status = "Not out"
                 # Else, remains "DNB" if not in this range and didn't bat.
-        player_specific_data['how_out_string'] = dismissal_status # <-- ADDED LINE
+
         batsmanTabulate.append([btckd_player_initials, runs_scored, balls_faced, sr_val, dismissal_status])
         
     bowlerTabulate = []
@@ -2454,328 +2449,10 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
     innings2Battracker = batterTracker
     innings2Bowltracker = bowlerTracker
 
-def simulate_super_over_innings(batting_team_player_list, bowling_team_player_list, main_match_bat_tracker_batting_team, main_match_bowl_tracker_bowling_team, super_over_target_runs, batting_team_name, bowling_team_name, game_log_list_for_so):
-    # game_log_list_for_so is passed by reference to append log strings
-
-    # 1. Bowler Selection Logic
-    chosen_bowler = None
-    bowlers_who_bowled_stats = []
-
-    # Ensure main_match_bowl_tracker_bowling_team is a dict; otherwise, this logic can't proceed.
-    if not isinstance(main_match_bowl_tracker_bowling_team, dict):
-        game_log_list_for_so.append(f"Error: Main match bowling stats for {bowling_team_name} are not in the expected format (not a dict).")
-        # Fallback will be triggered later if chosen_bowler remains None
-    else:
-        for p_info in bowling_team_player_list:
-            if not isinstance(p_info, dict): # Skip if p_info isn't a dictionary from the team list
-                game_log_list_for_so.append(f"Warning: Player info item in bowling_team_player_list is not a dictionary. Skipping.")
-                continue
-
-            p_initials = p_info.get('playerInitials')
-            if not p_initials: # Skip if no initials in player profile
-                game_log_list_for_so.append(f"Warning: Player info item in bowling_team_player_list missing 'playerInitials'. Name: {p_info.get('displayName', 'Unknown')}. Skipping.")
-                continue
-
-            if p_initials in main_match_bowl_tracker_bowling_team:
-                bowler_stat = main_match_bowl_tracker_bowling_team[p_initials]
-                # Verify that bowler_stat is a dictionary and 'balls' key exists and is > 0
-                if isinstance(bowler_stat, dict) and bowler_stat.get('balls', 0) > 0:
-                    # Calculate economy using main match stats
-                    economy = (bowler_stat.get('runs', 0) * 6) / bowler_stat['balls'] # 'balls' is > 0 here
-                    bowlers_who_bowled_stats.append({
-                        'player_obj': p_info, # Full player object from team list
-                        'initials': p_initials,
-                        'wickets': bowler_stat.get('wickets', 0),
-                        'economy': economy,
-                        'runs_conceded': bowler_stat.get('runs', 0), # Store main match runs conceded
-                        'balls_bowled': bowler_stat['balls']        # Store main match balls bowled
-                    })
-                # else: # Optional: Log if player was in tracker but didn't bowl
-                #     game_log_list_for_so.append(f"Debug: Player {p_initials} in main match tracker but bowled 0 balls or stat not dict.")
-            # else: # Optional: Log if player from list not in tracker
-            #    game_log_list_for_so.append(f"Debug: Player {p_initials} from team list not found in main match bowling tracker.")
-
-    if bowlers_who_bowled_stats:
-        max_wickets = -1
-        for b in bowlers_who_bowled_stats:
-            if b['wickets'] > max_wickets:
-                max_wickets = b['wickets']
-
-        tied_on_wickets = [b for b in bowlers_who_bowled_stats if b['wickets'] == max_wickets]
-
-        if max_wickets > 0: # At least one bowler took a wicket
-            min_economy_at_max_wickets = float('inf')
-            for b in tied_on_wickets:
-                if b['economy'] < min_economy_at_max_wickets:
-                    min_economy_at_max_wickets = b['economy']
-
-            tied_on_economy_too = [b for b in tied_on_wickets if b['economy'] == min_economy_at_max_wickets]
-            chosen_bowler_stat_entry = random.choice(tied_on_economy_too)
-            chosen_bowler = chosen_bowler_stat_entry['player_obj']
-        else: # No bowler took any wickets, choose based on best economy from those who bowled
-            min_economy_overall = float('inf')
-            for b in bowlers_who_bowled_stats:
-                if b['economy'] < min_economy_overall:
-                    min_economy_overall = b['economy']
-
-            tied_on_min_economy = [b for b in bowlers_who_bowled_stats if b['economy'] == min_economy_overall]
-            chosen_bowler_stat_entry = random.choice(tied_on_min_economy)
-            chosen_bowler = chosen_bowler_stat_entry['player_obj']
-
-    if not chosen_bowler: # Fallback if no bowler bowled or other issues
-        game_log_list_for_so.append(f"Note: No bowler from {bowling_team_name} bowled in main match or issue in selection. Random bowler chosen for Super Over.")
-        # Ensure we pick a player who CAN bowl (has bowling stats), if possible
-        potential_bowlers_from_list = [p for p in bowling_team_player_list if 'bowlRunDenominationsObject' in p]
-        if potential_bowlers_from_list:
-            chosen_bowler = random.choice(potential_bowlers_from_list)
-        else: # Absolute fallback: any player
-            chosen_bowler = random.choice(bowling_team_player_list)
-
-
-    # 2. Batsmen Selection Logic (Top 3)
-    batsman1_obj, batsman2_obj, batsman3_obj = None, None, None
-    candidate_batsmen_stats = []
-    for p_info in batting_team_player_list:
-        p_initials = p_info.get('playerInitials')
-        if p_initials in main_match_bat_tracker_batting_team:
-            stat = main_match_bat_tracker_batting_team[p_initials]
-            runs = stat.get('runs', 0)
-            balls_faced = stat.get('balls', 0)
-            sr = (runs * 100) / balls_faced if balls_faced > 0 else 0
-            candidate_batsmen_stats.append({
-                'player_obj': p_info, # Full player object
-                'initials': p_initials,
-                'runs': runs,
-                'balls': balls_faced,
-                'sr': sr
-            })
-
-    filter1_batsmen = [b for b in candidate_batsmen_stats if b['sr'] > 200 and b['runs'] > 15]
-
-    selected_batsmen_final_obj = []
-
-    if len(filter1_batsmen) >= 3:
-        filter1_batsmen.sort(key=lambda x: x['runs'], reverse=True)
-        for b_stat in filter1_batsmen[:3]:
-            selected_batsmen_final_obj.append(b_stat['player_obj'])
-    else:
-        for b_stat in filter1_batsmen:
-            selected_batsmen_final_obj.append(b_stat['player_obj'])
-
-        remaining_candidates = [b for b in candidate_batsmen_stats if b['player_obj'] not in selected_batsmen_final_obj]
-        remaining_candidates.sort(key=lambda x: x['runs'], reverse=True)
-
-        needed = 3 - len(selected_batsmen_final_obj)
-        for b_stat in remaining_candidates[:needed]:
-            selected_batsmen_final_obj.append(b_stat['player_obj'])
-
-    # Assign to batsman1_obj, batsman2_obj, batsman3_obj
-    if len(selected_batsmen_final_obj) >= 1: batsman1_obj = selected_batsmen_final_obj[0]
-    if len(selected_batsmen_final_obj) >= 2: batsman2_obj = selected_batsmen_final_obj[1]
-    if len(selected_batsmen_final_obj) >= 3: batsman3_obj = selected_batsmen_final_obj[2]
-
-    # Fallback if not enough batsmen selected (e.g., small team list or few batted)
-    if not batsman1_obj and candidate_batsmen_stats: batsman1_obj = random.choice(candidate_batsmen_stats)['player_obj']
-    elif not batsman1_obj: batsman1_obj = random.choice(batting_team_player_list) # Absolute fallback
-
-    if not batsman2_obj and candidate_batsmen_stats:
-        temp_candidates = [b['player_obj'] for b in candidate_batsmen_stats if b['player_obj'] != batsman1_obj]
-        if temp_candidates: batsman2_obj = random.choice(temp_candidates)
-    elif not batsman2_obj: # Absolute fallback
-        temp_candidates = [p for p in batting_team_player_list if p != batsman1_obj]
-        if temp_candidates: batsman2_obj = random.choice(temp_candidates)
-        else: batsman2_obj = batsman1_obj # Should not happen in a valid team
-
-    if not batsman3_obj and candidate_batsmen_stats:
-        temp_candidates = [b['player_obj'] for b in candidate_batsmen_stats if b['player_obj'] not in [batsman1_obj, batsman2_obj]]
-        if temp_candidates: batsman3_obj = random.choice(temp_candidates)
-    elif not batsman3_obj: # Absolute fallback
-        temp_candidates = [p for p in batting_team_player_list if p not in [batsman1_obj, batsman2_obj]]
-        if temp_candidates: batsman3_obj = random.choice(temp_candidates)
-        else: batsman3_obj = batsman1_obj # Should ideally not happen
-
-    game_log_list_for_so.append(f"SO Batting: {batting_team_name}, Bowler: {chosen_bowler.get('displayName', 'N/A')}")
-    game_log_list_for_so.append(f"SO Batsmen: {batsman1_obj.get('displayName', 'N/A')}, {batsman2_obj.get('displayName', 'N/A')}, Next: {batsman3_obj.get('displayName', 'N/A') if batsman3_obj else 'N/A'}")
-
-
-    # 3. Super Over Innings Simulation Core
-    so_runs = 0
-    so_wickets = 0
-    so_legal_balls = 0
-
-    current_batter1_obj = batsman1_obj
-    current_batter2_obj = batsman2_obj
-    on_strike_obj = current_batter1_obj
-
-    is_next_ball_free_hit = False
-
-    # Simplified probabilities for Super Over - more aggressive
-    # These are career stats of the chosen players
-    # Ensure bat_info and bowl_info are dictionaries with expected keys
-    # For Super Over, we might need to ensure that player objects (batsman1_obj, chosen_bowler)
-    # have their processed stats like 'batRunDenominationsObject', 'bowlRunDenominationsObject', 'batOutsRate', 'bowlOutsRate'
-    # This might require pre-processing them similar to how it's done in innings1/innings2 if not already done.
-    # For this implementation, we assume they have these fields from their main player list structure.
-    bat_info = on_strike_obj if on_strike_obj else {} # Fallback to empty dict
-    bowl_info = chosen_bowler if chosen_bowler else {}
-
-
-    # Base probabilities from career stats
-    denAvg = {}
-    # Ensure 'batRunDenominationsObject' and 'bowlRunDenominationsObject' exist and are dicts
-    bat_den_obj = bat_info.get('batRunDenominationsObject', {})
-    bowl_den_obj = bowl_info.get('bowlRunDenominationsObject', {})
-
-    all_run_keys = set(list(bat_den_obj.keys()) + list(bowl_den_obj.keys()))
-    for r_key in all_run_keys:
-        if r_key.isdigit() or r_key == 'W': # Consider only run keys and W (for outAvg calculation basis)
-             denAvg[r_key] = (bat_den_obj.get(r_key,0) + bowl_den_obj.get(r_key,0))/2
-
-    outAvg = (bat_info.get('batOutsRate',0.1) + bowl_info.get('bowlOutsRate',0.1)) / 2
-
-
-    # Aggression Boost for Super Over
-    denAvg['6'] = denAvg.get('6', 0.05) * 1.5 # Default to 0.05 if key missing
-    denAvg['4'] = denAvg.get('4', 0.10) * 1.3 # Default to 0.10 if key missing
-    denAvg['0'] = max(0.01, denAvg.get('0', 0.3) * 0.7) # Default to 0.3
-    denAvg['1'] = max(0.01, denAvg.get('1', 0.3) * 0.8) # Default to 0.3
-    outAvg = max(0.01, outAvg * 1.1)
-
-    # Normalize denAvg to sum to 1 (excluding outAvg)
-    # Ensure only numeric keys that represent runs are summed up for normalization
-    numeric_run_keys = [k_da for k_da in denAvg.keys() if k_da.isdigit()]
-    current_sum_den_avg = sum(denAvg.get(k_da, 0) for k_da in numeric_run_keys)
-
-    if current_sum_den_avg == 0:
-        denAvg['0'] = 0.5; denAvg['1'] = 0.5; # Fallback default
-        current_sum_den_avg = 1.0
-
-    for k_da in numeric_run_keys:
-        denAvg[k_da] = denAvg.get(k_da,0) / current_sum_den_avg
-
-
-    ball_count_this_over_display = 0 # For logging display like 0.1, 0.2
-
-    while so_legal_balls < 6 and so_wickets < 2:
-        if super_over_target_runs is not None and so_runs > super_over_target_runs:
-            game_log_list_for_so.append(f"SO: {batting_team_name} achieved target of {super_over_target_runs + 1}.")
-            break
-
-        ball_count_this_over_display +=1 # This is just for display in log
-        current_ball_log_prefix = f"SO {bowling_team_name} ball 0.{ball_count_this_over_display}"
-
-
-        # No Ball check
-        if bowl_info.get('bowlNoballRate', 0.01) > random.uniform(0,1):
-            so_runs += 1
-            is_next_ball_free_hit = True
-            game_log_list_for_so.append(f"{current_ball_log_prefix}: NoBall! Score: {so_runs}/{so_wickets}")
-            continue
-
-        # Wide check
-        if bowl_info.get('bowlWideRate', 0.02) > random.uniform(0,1):
-            so_runs += 1
-            game_log_list_for_so.append(f"{current_ball_log_prefix}: Wide! Score: {so_runs}/{so_wickets}")
-            continue
-
-        # Legal Delivery
-        so_legal_balls += 1
-
-        delivery_runs = 0
-        is_wicket_this_ball = False
-
-        # Update bat_info for current on_strike_obj before probability calculation
-        # This is crucial if on_strike_obj changes due to a wicket.
-        bat_info = on_strike_obj if on_strike_obj else {}
-        bat_den_obj = bat_info.get('batRunDenominationsObject', {})
-        # Recalculate combined probabilities if batsman changes (simplified for SO - assume fixed for the over or use career stats)
-        # For simplicity here, we'll use the initially calculated denAvg and outAvg for the chosen bowler and initial striker type,
-        # but ideally, this would refresh if the batsman changes and has vastly different stats.
-        # The aggression boost is already applied.
-
-        outcome_rand = random.uniform(0,1)
-        if outAvg > outcome_rand:
-             # Wicket only if not a "run out" on a Free Hit (other FH dismissals are not out)
-            if not (is_next_ball_free_hit and random.choice(["bowled", "lbw", "caught", "runOut", "stumped"]) != "runOut"):
-                is_wicket_this_ball = True
-
-        if is_wicket_this_ball:
-            so_wickets += 1
-            # Determine out type (simplified for SO)
-            out_type_so = random.choice(["bowled", "caught", "lbw"]) if not is_next_ball_free_hit else "runOut" # More likely runout on FH if wicket
-            game_log_list_for_so.append(f"{current_ball_log_prefix}: WICKET! ({on_strike_obj.get('displayName', 'N/A')} {out_type_so}) Score: {so_runs}/{so_wickets}")
-
-            if so_wickets == 1:
-                if on_strike_obj == current_batter1_obj: on_strike_obj = batsman3_obj
-                elif on_strike_obj == current_batter2_obj: on_strike_obj = batsman3_obj # Should be current_batter1/2
-
-                if not on_strike_obj: # If batsman3_obj was None or became None
-                    game_log_list_for_so.append(f"SO Error: Next batsman (batsman3_obj) not available or already out!")
-                    break
-                # Update bat_info for the new batsman for next ball (if any)
-                bat_info = on_strike_obj if on_strike_obj else {}
-                bat_den_obj = bat_info.get('batRunDenominationsObject', {})
-                # Re-calculate combined probabilities (simplified: not fully re-doing denAvg for SO here)
-
-            elif so_wickets == 2:
-                break
-        else: # No wicket
-            run_rand_val = random.random() # New random number for run determination
-            cumulative_prob = 0.0
-            # Ensure denAvg keys are strings '0', '1', etc.
-            possible_runs = {'0': denAvg.get('0', 0.3), '1': denAvg.get('1', 0.3), '2': denAvg.get('2', 0.15),
-                             '3': denAvg.get('3', 0.05), '4': denAvg.get('4', 0.1), '6': denAvg.get('6', 0.1)}
-
-            # Normalize these probabilities if they don't sum to 1
-            current_sum_possible_runs = sum(possible_runs.values())
-            if current_sum_possible_runs == 0: possible_runs = {'0':1.0} # Fallback
-            else:
-                for r in possible_runs: possible_runs[r] /= current_sum_possible_runs
-
-            for r_score_str, prob_r in possible_runs.items():
-                r_score = int(r_score_str)
-                if run_rand_val < cumulative_prob + prob_r:
-                    delivery_runs = r_score
-                    break
-                cumulative_prob += prob_r
-            else: # Fallback
-                delivery_runs = 0
-
-            so_runs += delivery_runs
-            log_msg = f"{current_ball_log_prefix}: {delivery_runs} run{'s' if delivery_runs != 1 else ''}."
-            if is_next_ball_free_hit: log_msg += " (Free Hit)"
-            log_msg += f" Score: {so_runs}/{so_wickets}"
-            game_log_list_for_so.append(log_msg)
-
-            if delivery_runs % 2 == 1:
-                if on_strike_obj == current_batter1_obj: on_strike_obj = current_batter2_obj
-                else: on_strike_obj = current_batter1_obj
-
-        if is_next_ball_free_hit: # Consume free hit
-            is_next_ball_free_hit = False
-
-        # Check for target achieved after runs update
-        if super_over_target_runs is not None and so_runs > super_over_target_runs:
-            game_log_list_for_so.append(f"SO: {batting_team_name} achieved target of {super_over_target_runs + 1} runs.")
-            break
-
-
-    game_log_list_for_so.append(f"SO End for {batting_team_name}: {so_runs}/{so_wickets} from {so_legal_balls} legal balls.")
-
-    # 4. Return Values
-    return so_runs, so_wickets, so_legal_balls
-
 def game(manual=True, sentTeamOne=None, sentTeamTwo=None, switch="group"):
     global innings1Batting, innings1Bowling, innings2Batting, innings2Bowling, innings1Balls, innings2Balls
     global innings1Log, innings2Log, innings1Battracker, innings2Battracker, innings2Bowltracker, innings1Bowltracker
     global innings1Runs, innings2Runs
-
-    superOverPlayed = False
-    superOverWinner = None
-    superOverDetails = []
-
-    local_winner = None # Initialize local version
-    local_winMsg = "Match outcome not determined" # Initialize local version
 
     innings1Batting = None
     innings1Bowling = None
@@ -2873,110 +2550,13 @@ def game(manual=True, sentTeamOne=None, sentTeamTwo=None, switch="group"):
     # print(innings1Log)
     # print(innings2Log)
     # Ensure 'balls' in innings summary is the total legal balls bowled.
-
-    local_winner = winner # Capture winner from global scope potentially set by innings1/innings2
-    local_winMsg = winMsg   # Capture winMsg from global scope
-
-    # Check for TIE and trigger Super Over(s)
-    if local_winner == "tie": # Use local_winner for the check
-        superOverPlayed = True
-        superOverDetails.append("Main match tied. Super Over to follow.")
-
-        # Determine Super Over Teams:
-        # Team that batted second in the main match (getBatting()[1]) bats first in the Super Over.
-        # Team that batted first in the main match (getBatting()[0]) bowls first (bats second) in the Super Over.
-
-        # Full player lists for SO simulation (used by simulate_super_over_innings for player selection)
-        team_batting_second_in_main_match_FULL_LIST = getBatting()[1] # This team will bat FIRST in SO
-        team_bowling_second_in_main_match_FULL_LIST = getBatting()[0] # This team will bowl FIRST in SO (bat second in SO)
-
-        # Names for logging
-        name_team_batting_second_in_main_match = getBatting()[3] # Bats FIRST in SO
-        name_team_bowling_second_in_main_match = getBatting()[2] # Bowls FIRST in SO (bats second in SO)
-
-        # Trackers from main match needed for SO player selection
-        # For the team batting FIRST in SO (was team batting SECOND in main match):
-        bat_tracker_SO_team_bat_first = innings2Battracker
-        bowl_tracker_SO_team_bat_first = innings2Bowltracker # Their bowling stats from main match
-
-        # For the team bowling FIRST in SO (was team batting FIRST in main match):
-        bat_tracker_SO_team_bowl_first = innings1Battracker
-        bowl_tracker_SO_team_bowl_first = innings1Bowltracker # Their bowling stats from main match
-
-        so_round = 0
-        while True: # Loop for potentially multiple Super Overs in playoffs
-            so_round += 1
-            current_so_log_prefix = f"SO Round {so_round}"
-            superOverDetails.append(f"--- {current_so_log_prefix} ---")
-
-            # Innings 1 of current Super Over round
-            superOverDetails.append(f"{current_so_log_prefix} - Innings 1: {name_team_batting_second_in_main_match} batting.")
-            so1_runs, so1_wickets, _ = simulate_super_over_innings(
-                team_batting_second_in_main_match_FULL_LIST,      # Batting team player list
-                team_bowling_second_in_main_match_FULL_LIST,     # Bowling team player list
-                bat_tracker_SO_team_bat_first,                   # Batting team's main match batting stats
-                bowl_tracker_SO_team_bowl_first,                 # Bowling team's main match bowling stats
-                None,                                            # No target for first SO innings
-                name_team_batting_second_in_main_match,
-                name_team_bowling_second_in_main_match,
-                superOverDetails
-            )
-            superOverDetails.append(f"{current_so_log_prefix} - {name_team_batting_second_in_main_match}: {so1_runs}/{so1_wickets}")
-
-            # Innings 2 of current Super Over round
-            superOverDetails.append(f"{current_so_log_prefix} - Innings 2: {name_team_bowling_second_in_main_match} batting.")
-            so2_target = so1_runs + 1
-            so2_runs, so2_wickets, _ = simulate_super_over_innings(
-                team_bowling_second_in_main_match_FULL_LIST,     # Now this team bats
-                team_batting_second_in_main_match_FULL_LIST,      # Now this team bowls
-                bat_tracker_SO_team_bowl_first,                  # Their main match batting stats
-                bowl_tracker_SO_team_bat_first,                  # Opponent's main match bowling stats
-                so2_target,
-                name_team_bowling_second_in_main_match,
-                name_team_batting_second_in_main_match,
-                superOverDetails
-            )
-            superOverDetails.append(f"{current_so_log_prefix} - {name_team_bowling_second_in_main_match}: {so2_runs}/{so2_wickets} (Target: {so2_target})")
-
-            if so2_runs > so1_runs:
-                superOverWinner = name_team_bowling_second_in_main_match # Team batting 2nd in SO wins
-                local_winner = superOverWinner # Update main game winner
-                local_winMsg = f"{local_winner} won Super Over {so_round} ({so2_runs}/{so2_wickets} vs {so1_runs}/{so1_wickets})."
-                superOverDetails.append(local_winMsg)
-                break
-            elif so1_runs > so2_runs:
-                superOverWinner = name_team_batting_second_in_main_match # Team batting 1st in SO wins
-                local_winner = superOverWinner # Update main game winner
-                local_winMsg = f"{local_winner} won Super Over {so_round} ({so1_runs}/{so1_wickets} vs {so2_runs}/{so2_wickets})."
-                superOverDetails.append(local_winMsg)
-                break
-            else: # Super Over Tied
-                superOverWinner = "tie"
-                playoff_stages = ["qualifier 1", "eliminator", "qualifier 2", "final"] # Make it a list of lowercased strings
-
-                # Check if 'switch' (matchtag) indicates a playoff.
-                # If switch is None, or not a string, treat as non-playoff for safety.
-                is_playoff = isinstance(switch, str) and switch.lower() in playoff_stages
-
-                if not is_playoff:
-                    local_winner = "tie" # Main match remains a tie
-                    local_winMsg = f"Match Tied (Super Over {so_round} also Tied: {so1_runs} vs {so2_runs})"
-                    superOverDetails.append(local_winMsg)
-                    break
-                else: # Playoff match, and Super Over is tied again
-                    superOverDetails.append(f"Super Over {so_round} Tied ({so1_runs} vs {so2_runs})! Another Super Over will be played.")
-                    # Loop continues. For subsequent SOs, the roles are maintained from the first SO.
-                    # Player lists and trackers for who bats/bowls first in SO sequence are fixed.
     # The 'balls' variable within innings functions was modified to track legal balls.
     return {"innings1Batting": innings1Batting, "innings1Bowling": innings1Bowling, "innings2Batting": innings2Batting, 
             "innings2Bowling": innings2Bowling, "innings2Balls": innings2Balls, "innings1Balls": innings1Balls, # Use actual legal balls for innings1
-            "innings1Runs": innings1Runs, "innings2Runs": innings2Runs, "winMsg": local_winMsg, "innings1Battracker": innings1Battracker,
+            "innings1Runs": innings1Runs, "innings2Runs": innings2Runs, "winMsg": winMsg, "innings1Battracker": innings1Battracker,
             "innings2Battracker": innings2Battracker, "innings1Bowltracker": innings1Bowltracker, "innings2Bowltracker": innings2Bowltracker,
-            "innings1BatTeam": getBatting()[2],"innings2BatTeam": getBatting()[3], "winner": local_winner, "innings1Log": innings1Log,
-            "innings2Log": innings2Log, "tossMsg": tossMsg,
-            "superOverPlayed": superOverPlayed,
-            "superOverWinner": superOverWinner,
-            "superOverDetails": superOverDetails }
+            "innings1BatTeam": getBatting()[2],"innings2BatTeam": getBatting()[3], "winner": winner, "innings1Log": innings1Log,
+            "innings2Log": innings2Log, "tossMsg": tossMsg }
 
 
 
