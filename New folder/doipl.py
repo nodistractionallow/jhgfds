@@ -21,7 +21,7 @@ bowlingInfo = {}
 # Initialize points table
 for team in teams:
     points[team] = {
-        "P": 0, "W": 0, "L": 0, "T": 0,
+        "P": 0, "W": 0, "L": 0, "T": 0, "SO": 0,
         "runsScored": 0, "ballsFaced": 0,
         "runsConceded": 0, "ballsBowled": 0,
         "pts": 0
@@ -156,11 +156,11 @@ def display_points_table():
         nrr = 0
         if data['ballsFaced'] > 0 and data['ballsBowled'] > 0:
             nrr = (data['runsScored'] / data['ballsFaced']) * 6 - (data['runsConceded'] / data['ballsBowled']) * 6
-        row = [team.upper(), data['P'], data['W'], data['L'], data['T'], round(nrr, 2), data['pts']]
+        row = [team.upper(), data['P'], data['W'], data['L'], data['T'], data['SO'], round(nrr, 2), data['pts']]
         pointsTabulate.append(row)
-    pointsTabulate = sorted(pointsTabulate, key=lambda x: (x[6], x[5]), reverse=True)
+    pointsTabulate = sorted(pointsTabulate, key=lambda x: (x[7], x[6]), reverse=True) # Sort by Pts (idx 7), then NRR (idx 6)
     print("\nCurrent Points Table:")
-    print(tabulate(pointsTabulate, headers=["Team", "Played", "Won", "Lost", "Tied", "NRR", "Points"], tablefmt="grid"))
+    print(tabulate(pointsTabulate, headers=["Team", "Played", "Won", "Lost", "Tied", "SO", "NRR", "Points"], tablefmt="grid"))
 
 def display_top_players():
     battingTabulate = []
@@ -378,6 +378,11 @@ for team1, team2 in scheduled_matches_final:
             )
 
         print(f"\nResult: {resList['winMsg']}")
+        if resList.get('superOverPlayed', False) and resList.get('superOverDetails'):
+            print("--- Super Over Details ---")
+            for detail in resList['superOverDetails']:
+                print(detail)
+            print("-------------------------")
         print(random.choice(commentary_lines['end']))
 
         # Track batting/bowling format win
@@ -417,7 +422,16 @@ for team1, team2 in scheduled_matches_final:
                     bowlingInfo[player]['matches'] += 1
 
         # Points Table Update
-        teamA = resList['innings1BatTeam']
+        teamA_actual = resList['innings1BatTeam'] # Use actual team names from resList for SO count
+        teamB_actual = resList['innings2BatTeam']
+        if resList.get('superOverPlayed', False):
+            # Ensure team names from resList are valid keys in points dict (they should be)
+            if teamA_actual in points:
+                points[teamA_actual]['SO'] += 1
+            if teamB_actual in points:
+                points[teamB_actual]['SO'] += 1
+
+        teamA = resList['innings1BatTeam'] # Keep these for subsequent logic as they were
         teamB = resList['innings2BatTeam']
         teamARuns, teamABalls = resList['innings1Runs'], resList['innings1Balls']
         teamBRuns, teamBBalls = resList['innings2Runs'], resList['innings2Balls']
@@ -484,6 +498,11 @@ def playoffs(team1, team2, matchtag):
             )
         
         print(f"\nResult: {res['winMsg'].upper()}")
+        if res.get('superOverPlayed', False) and res.get('superOverDetails'):
+            print("--- Super Over Details ---")
+            for detail in res['superOverDetails']:
+                print(detail)
+            print("-------------------------")
         print(random.choice(commentary_lines['end']))
 
         winner = res['winner']
