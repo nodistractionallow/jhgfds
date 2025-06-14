@@ -2755,6 +2755,9 @@ def game(manual=True, sentTeamOne=None, sentTeamTwo=None, switch="group"):
     superOverWinner = None
     superOverDetails = []
 
+    local_winner = None # Initialize local version
+    local_winMsg = "Match outcome not determined" # Initialize local version
+
     innings1Batting = None
     innings1Bowling = None
     innings2Batting = None
@@ -2852,10 +2855,11 @@ def game(manual=True, sentTeamOne=None, sentTeamTwo=None, switch="group"):
     # print(innings2Log)
     # Ensure 'balls' in innings summary is the total legal balls bowled.
 
+    local_winner = winner # Capture winner from global scope potentially set by innings1/innings2
+    local_winMsg = winMsg   # Capture winMsg from global scope
+
     # Check for TIE and trigger Super Over(s)
-    # The 'winner' variable should be set by innings2 before this point.
-    # 'superOverPlayed', 'superOverWinner', 'superOverDetails' are already initialized.
-    if winner == "tie":
+    if local_winner == "tie": # Use local_winner for the check
         superOverPlayed = True
         superOverDetails.append("Main match tied. Super Over to follow.")
 
@@ -2917,15 +2921,15 @@ def game(manual=True, sentTeamOne=None, sentTeamTwo=None, switch="group"):
 
             if so2_runs > so1_runs:
                 superOverWinner = name_team_bowling_second_in_main_match # Team batting 2nd in SO wins
-                winner = superOverWinner # Update main game winner
-                winMsg = f"{winner} won Super Over {so_round} ({so2_runs}/{so2_wickets} vs {so1_runs}/{so1_wickets})."
-                superOverDetails.append(winMsg)
+                local_winner = superOverWinner # Update main game winner
+                local_winMsg = f"{local_winner} won Super Over {so_round} ({so2_runs}/{so2_wickets} vs {so1_runs}/{so1_wickets})."
+                superOverDetails.append(local_winMsg)
                 break
             elif so1_runs > so2_runs:
                 superOverWinner = name_team_batting_second_in_main_match # Team batting 1st in SO wins
-                winner = superOverWinner # Update main game winner
-                winMsg = f"{winner} won Super Over {so_round} ({so1_runs}/{so1_wickets} vs {so2_runs}/{so2_wickets})."
-                superOverDetails.append(winMsg)
+                local_winner = superOverWinner # Update main game winner
+                local_winMsg = f"{local_winner} won Super Over {so_round} ({so1_runs}/{so1_wickets} vs {so2_runs}/{so2_wickets})."
+                superOverDetails.append(local_winMsg)
                 break
             else: # Super Over Tied
                 superOverWinner = "tie"
@@ -2936,9 +2940,9 @@ def game(manual=True, sentTeamOne=None, sentTeamTwo=None, switch="group"):
                 is_playoff = isinstance(switch, str) and switch.lower() in playoff_stages
 
                 if not is_playoff:
-                    winner = "tie" # Main match remains a tie
-                    winMsg = f"Match Tied (Super Over {so_round} also Tied: {so1_runs} vs {so2_runs})"
-                    superOverDetails.append(winMsg)
+                    local_winner = "tie" # Main match remains a tie
+                    local_winMsg = f"Match Tied (Super Over {so_round} also Tied: {so1_runs} vs {so2_runs})"
+                    superOverDetails.append(local_winMsg)
                     break
                 else: # Playoff match, and Super Over is tied again
                     superOverDetails.append(f"Super Over {so_round} Tied ({so1_runs} vs {so2_runs})! Another Super Over will be played.")
@@ -2947,9 +2951,9 @@ def game(manual=True, sentTeamOne=None, sentTeamTwo=None, switch="group"):
     # The 'balls' variable within innings functions was modified to track legal balls.
     return {"innings1Batting": innings1Batting, "innings1Bowling": innings1Bowling, "innings2Batting": innings2Batting, 
             "innings2Bowling": innings2Bowling, "innings2Balls": innings2Balls, "innings1Balls": innings1Balls, # Use actual legal balls for innings1
-            "innings1Runs": innings1Runs, "innings2Runs": innings2Runs, "winMsg": winMsg, "innings1Battracker": innings1Battracker,
+            "innings1Runs": innings1Runs, "innings2Runs": innings2Runs, "winMsg": local_winMsg, "innings1Battracker": innings1Battracker,
             "innings2Battracker": innings2Battracker, "innings1Bowltracker": innings1Bowltracker, "innings2Bowltracker": innings2Bowltracker,
-            "innings1BatTeam": getBatting()[2],"innings2BatTeam": getBatting()[3], "winner": winner, "innings1Log": innings1Log,
+            "innings1BatTeam": getBatting()[2],"innings2BatTeam": getBatting()[3], "winner": local_winner, "innings1Log": innings1Log,
             "innings2Log": innings2Log, "tossMsg": tossMsg,
             "superOverPlayed": superOverPlayed,
             "superOverWinner": superOverWinner,
