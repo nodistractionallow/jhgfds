@@ -377,12 +377,12 @@ for team1, team2 in scheduled_matches_final:
                 resList[bowl_tracker_key]
             )
 
-        print(f"\nResult: {resList['winMsg']}")
         if resList.get('superOverPlayed', False) and resList.get('superOverDetails'):
             print("--- Super Over Details ---")
             for detail in resList['superOverDetails']:
                 print(detail)
             print("-------------------------")
+        print(f"\nResult: {resList['winMsg']}")
         print(random.choice(commentary_lines['end']))
 
         # Track batting/bowling format win
@@ -497,12 +497,12 @@ def playoffs(team1, team2, matchtag):
                 res[bowl_tracker_key]
             )
         
-        print(f"\nResult: {res['winMsg'].upper()}")
         if res.get('superOverPlayed', False) and res.get('superOverDetails'):
             print("--- Super Over Details ---")
             for detail in res['superOverDetails']:
                 print(detail)
             print("-------------------------")
+        print(f"\nResult: {res['winMsg'].upper()}")
         print(random.choice(commentary_lines['end']))
 
         winner = res['winner']
