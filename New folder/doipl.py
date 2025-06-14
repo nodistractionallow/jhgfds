@@ -529,6 +529,7 @@ for team1, team2 in scheduled_matches_final:
         input("Press Enter to continue to the next match...")
 
     except Exception as e:
+        # This is a test comment
         print(f"Error during match {team1.upper()} vs {team2.upper()}: {str(e)}")
         input("Press Enter to continue or Ctrl+C to exit...")
         continue
