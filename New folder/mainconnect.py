@@ -2449,7 +2449,7 @@ def innings2(batting, bowling, battingName, bowlingName, pace, spin, outfield, d
     innings2Battracker = batterTracker
     innings2Bowltracker = bowlerTracker
 
-def game(manual=True, sentTeamOne=None, sentTeamTwo=None, switch="group"):
+def game(manual=True, sentTeamOne=None, sentTeamTwo=None, switch="group", rain_expected=False):
     global innings1Batting, innings1Bowling, innings2Batting, innings2Bowling, innings1Balls, innings2Balls
     global innings1Log, innings2Log, innings1Battracker, innings2Battracker, innings2Bowltracker, innings1Bowltracker
     global innings1Runs, innings2Runs
