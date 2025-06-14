@@ -2461,20 +2461,39 @@ def simulate_super_over_innings(batting_team_player_list, bowling_team_player_li
     chosen_bowler = None
     bowlers_who_bowled_stats = []
 
-    for p_info in bowling_team_player_list:
-        p_initials = p_info.get('playerInitials')
-        if p_initials in main_match_bowl_tracker_bowling_team:
-            bowler_stat = main_match_bowl_tracker_bowling_team[p_initials]
-            if bowler_stat.get('balls', 0) > 0:
-                economy = (bowler_stat.get('runs', 0) * 6) / bowler_stat.get('balls') if bowler_stat.get('balls') > 0 else float('inf')
-                bowlers_who_bowled_stats.append({
-                    'player_obj': p_info, # Full player object from team list
-                    'initials': p_initials,
-                    'wickets': bowler_stat.get('wickets', 0),
-                    'economy': economy,
-                    'runs': bowler_stat.get('runs',0), # Runs conceded
-                    'balls': bowler_stat.get('balls',0)
-                })
+    # Ensure main_match_bowl_tracker_bowling_team is a dict; otherwise, this logic can't proceed.
+    if not isinstance(main_match_bowl_tracker_bowling_team, dict):
+        game_log_list_for_so.append(f"Error: Main match bowling stats for {bowling_team_name} are not in the expected format (not a dict).")
+        # Fallback will be triggered later if chosen_bowler remains None
+    else:
+        for p_info in bowling_team_player_list:
+            if not isinstance(p_info, dict): # Skip if p_info isn't a dictionary from the team list
+                game_log_list_for_so.append(f"Warning: Player info item in bowling_team_player_list is not a dictionary. Skipping.")
+                continue
+
+            p_initials = p_info.get('playerInitials')
+            if not p_initials: # Skip if no initials in player profile
+                game_log_list_for_so.append(f"Warning: Player info item in bowling_team_player_list missing 'playerInitials'. Name: {p_info.get('displayName', 'Unknown')}. Skipping.")
+                continue
+
+            if p_initials in main_match_bowl_tracker_bowling_team:
+                bowler_stat = main_match_bowl_tracker_bowling_team[p_initials]
+                # Verify that bowler_stat is a dictionary and 'balls' key exists and is > 0
+                if isinstance(bowler_stat, dict) and bowler_stat.get('balls', 0) > 0:
+                    # Calculate economy using main match stats
+                    economy = (bowler_stat.get('runs', 0) * 6) / bowler_stat['balls'] # 'balls' is > 0 here
+                    bowlers_who_bowled_stats.append({
+                        'player_obj': p_info, # Full player object from team list
+                        'initials': p_initials,
+                        'wickets': bowler_stat.get('wickets', 0),
+                        'economy': economy,
+                        'runs_conceded': bowler_stat.get('runs', 0), # Store main match runs conceded
+                        'balls_bowled': bowler_stat['balls']        # Store main match balls bowled
+                    })
+                # else: # Optional: Log if player was in tracker but didn't bowl
+                #     game_log_list_for_so.append(f"Debug: Player {p_initials} in main match tracker but bowled 0 balls or stat not dict.")
+            # else: # Optional: Log if player from list not in tracker
+            #    game_log_list_for_so.append(f"Debug: Player {p_initials} from team list not found in main match bowling tracker.")
 
     if bowlers_who_bowled_stats:
         max_wickets = -1
