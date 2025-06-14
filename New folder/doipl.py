@@ -377,7 +377,7 @@ for team1, team2 in scheduled_matches_final:
         input("Press Enter to start the match...")
         print(random.choice(commentary_lines['start']))
 
-        resList = game(False, team1, team2)
+        resList = game(False, team1, team2, switch="group", rain_expected=rain_expected_for_this_match)
 
         # Display ball-by-ball and innings summary for both innings
         for innings, team_key, runs_key, balls_key, bat_tracker_key, bowl_tracker_key in [
@@ -544,7 +544,7 @@ def playoffs(team1, team2, matchtag):
         input("Press Enter to start the playoff match...")
         print(random.choice(commentary_lines['start']))
         
-        res = game(False, team1.lower(), team2.lower(), matchtag)
+        res = game(False, team1.lower(), team2.lower(), switch=matchtag, rain_expected=False)
         
         for innings, team_key, runs_key, balls_key, bat_tracker_key, bowl_tracker_key in [
             ('innings1Log', 'innings1BatTeam', 'innings1Runs', 'innings1Balls', 'innings1Battracker', 'innings1Bowltracker'),
